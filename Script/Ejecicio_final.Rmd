@@ -47,7 +47,9 @@ p_load(haven,        #Leer archivos .dta
        patchwork,     #Combinar gráficos
        ggrepel,       #Etiquetas en gráficos sin solapamiento
        osmdata,       #Descargar contornos desde OpenStreetMap (sin API key)
-       sf             #Manejo de datos espaciales
+       sf,            #Manejo de datos espaciales
+       htmltools,     #Manipulación avanzada de HTML (para tablas)
+       
       )
 ```
 
@@ -948,9 +950,128 @@ robusto_loglog <- coeftest(
 
 print(robusto_loglog)
 ```
+```{r seccion-16-17, echo=FALSE, warning=FALSE, message=FALSE}
+
+# coeftest devuelve matriz con cols: [,1]=Estimate [,2]=SE [,3]=t [,4]=p-valor
+rob <- data.frame(
+  term     = rownames(robusto_loglog),
+  estimate = robusto_loglog[, 1],
+  se       = robusto_loglog[, 2],
+  tstat    = robusto_loglog[, 3],
+  pval     = robusto_loglog[, 4],
+  stringsAsFactors = FALSE
+)
+
+# ── Etiquetas ─────────────────────────────────────────────────
+coef_labels <- c(
+  "(Intercept)"           = "Intercepto",
+  "ln_pm2_5_exp"          = "ln(PM2.5 estimado)",
+  "distancia_estacion_km" = "Distancia estación (km)",
+  "area_m2"               = "Área (m²)",
+  "habitaciones"          = "Habitaciones",
+  "banos"                 = "Baños",
+  "parqueaderos"          = "Parqueaderos",
+  "precipitacion"         = "Precipitación"
+)
+
+rob <- rob %>%
+  mutate(
+    Variable = coef_labels[term],
+    Variable = ifelse(is.na(Variable), term, Variable),
+    stars = case_when(
+      pval < 0.001 ~ "***",
+      pval < 0.01  ~ "**",
+      pval < 0.05  ~ "*",
+      pval < 0.1   ~ "+",
+      TRUE         ~ ""
+    ),
+    Coeficiente      = paste0(formatC(round(estimate, 5), format = "f", digits = 5), stars),
+    `Error estándar` = paste0("(", formatC(round(se, 5), format = "f", digits = 5), ")"),
+    `Estadístico t`  = formatC(round(tstat, 3), format = "f", digits = 3),
+    `p-valor`        = case_when(
+      pval < 0.001 ~ "< 0.001",
+      TRUE         ~ formatC(round(pval, 4), format = "f", digits = 4)
+    )
+  )
+
+# ── Tabla de coeficientes ─────────────────────────────────────
+tabla_modelo <- rob %>%
+  select(Variable, Coeficiente, `Error estándar`, `Estadístico t`, `p-valor`)
+
+n_coef <- nrow(tabla_modelo)
+
+# ── Bondad de ajuste ──────────────────────────────────────────
+s <- summary(modelo_loglog)
+
+gof <- data.frame(
+  Variable         = c("Observaciones", "R²", "R² ajustado",
+                       "Error estándar residual", "Estadístico F"),
+  Coeficiente      = c(
+    formatC(nobs(modelo_loglog),       format = "d", big.mark = ","),
+    formatC(round(s$r.squared,     3), format = "f", digits = 3),
+    formatC(round(s$adj.r.squared, 3), format = "f", digits = 3),
+    formatC(round(s$sigma,         4), format = "f", digits = 4),
+    formatC(round(s$fstatistic[1], 1), format = "f", digits = 1)
+  ),
+  `Error estándar` = "",
+  `Estadístico t`  = "",
+  `p-valor`        = c("", "", "", "",
+    ifelse(
+      pf(s$fstatistic[1], s$fstatistic[2], s$fstatistic[3],
+         lower.tail = FALSE) < 0.001, "< 0.001", "")
+  ),
+  stringsAsFactors  = FALSE,
+  check.names       = FALSE
+)
+
+tabla_final <- rbind(tabla_modelo, gof)
+filas_gof_idx <- (n_coef + 1):nrow(tabla_final)
+
+# ── Render ────────────────────────────────────────────────────
+tabla_final %>%
+  kbl(
+    caption   = "Tabla 6. Resultados del modelo hedónico log-log — Variable dependiente: ln(Precio de venta)",
+    align     = c("l", "r", "r", "r", "r"),
+    booktabs  = TRUE,
+    escape    = FALSE,
+    col.names = c("Variable", "Coeficiente", "Error estándar (HC1)",
+                  "Estadístico t", "p-valor")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "condensed"),
+    full_width        = TRUE,
+    font_size         = 12
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  row_spec(1, background = "#F8F8F8", color = "#888888", italic = TRUE) %>%
+  row_spec(2:3, bold = TRUE, background = "#EBF3FB") %>%
+  row_spec(4:n_coef, background = "#FFFFFF") %>%
+  row_spec(n_coef, extra_css = "border-bottom: 2px solid #2E74B5;") %>%
+  row_spec(filas_gof_idx, background = "#F0F7EF") %>%
+  column_spec(1, bold = TRUE, width = "16em") %>%
+  column_spec(2, width = "9em") %>%
+  column_spec(3, width = "9em", color = "#555555", italic = TRUE) %>%
+  column_spec(4, width = "8em") %>%
+  column_spec(5, width = "7em") %>%
+  pack_rows("Intercepto",           1,        1,                bold = TRUE, color = "#888888") %>%
+  pack_rows("Variables ambientales", 2,       3,                bold = TRUE, color = "#2E74B5") %>%
+  pack_rows("Variables de control",  4,       n_coef,           bold = TRUE, color = "#2E74B5") %>%
+  pack_rows("Bondad de ajuste",      n_coef+1, nrow(tabla_final), bold = TRUE, color = "#34A853") %>%
+  footnote(
+    general = paste0(
+      "Errores estándar robustos HC1. ",
+      "+ p < 0.1,  * p < 0.05,  ** p < 0.01,  *** p < 0.001. ",
+      "Especificación log-log sin efectos fijos de localidad. ",
+      "Muestra: 1,972 inmuebles en venta — Bogotá D.C., 2026."
+    ),
+    general_title     = "Nota:",
+    footnote_as_chunk = TRUE
+  )
+```
 
 ###17.1 Comparación de resultados
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+```{r tabla-modelos-comparacion, echo=FALSE, warning=FALSE, message=FALSE}
+
 modelos_comparacion <- list(
   "Nivel (original)"  = lm(ln_precio_venta ~ pm2_5_exp + distancia_estacion_km +
                               area_m2 + habitaciones + banos + parqueaderos +
@@ -961,64 +1082,578 @@ modelos_comparacion <- list(
   "Log-log sin EF"    = modelo_loglog
 )
 
-modelsummary(
-  modelos_comparacion,
-  vcov = "HC1",
-  stars = TRUE,
-  coef_map = c(
-    "pm2_5_exp"            = "PM2.5 exp (nivel)",
-    "ln_pm2_5_exp"         = "ln(PM2.5 exp)",
-    "distancia_estacion_km"= "Distancia estación (km)",
-    "area_m2"              = "Área m²",
-    "habitaciones"         = "Habitaciones",
-    "banos"                = "Baños",
-    "parqueaderos"         = "Parqueaderos",
-    "precipitacion"        = "Precipitación"
-  ),
-  gof_map = c("nobs","r.squared","adj.r.squared")
+# ── Extraer coeficientes con errores robustos HC1 ─────────────
+coef_map <- c(
+  "pm2_5_exp"             = "PM2.5 exp (nivel)",
+  "ln_pm2_5_exp"          = "ln(PM2.5 exp)",
+  "distancia_estacion_km" = "Distancia estación (km)",
+  "area_m2"               = "Área m²",
+  "habitaciones"          = "Habitaciones",
+  "banos"                 = "Baños",
+  "parqueaderos"          = "Parqueaderos",
+  "precipitacion"         = "Precipitación"
 )
+
+extraer_fila <- function(modelo, var) {
+  rob  <- coeftest(modelo, vcov = vcovHC(modelo, type = "HC1"))
+  if (!var %in% rownames(rob)) return(c("", ""))
+  est  <- rob[var, 1]
+  se   <- rob[var, 2]
+  pval <- rob[var, 4]
+  stars <- case_when(
+    pval < 0.001 ~ "***",
+    pval < 0.01  ~ "**",
+    pval < 0.05  ~ "*",
+    pval < 0.1   ~ "+",
+    TRUE         ~ ""
+  )
+  c(
+    paste0(formatC(round(est, 4), format = "f", digits = 4), stars),
+    paste0("(", formatC(round(se, 4), format = "f", digits = 4), ")")
+  )
+}
+
+# ── Construir tabla ───────────────────────────────────────────
+nombres_modelos <- names(modelos_comparacion)
+
+filas <- lapply(names(coef_map), function(var) {
+  etiqueta <- coef_map[[var]]
+  vals <- lapply(modelos_comparacion, extraer_fila, var = var)
+  coefs <- sapply(vals, `[`, 1)
+  ses   <- sapply(vals, `[`, 2)
+  rbind(
+    c(etiqueta, coefs),
+    c("",        ses)
+  )
+})
+
+tabla_df <- as.data.frame(
+  do.call(rbind, filas),
+  stringsAsFactors = FALSE
+)
+colnames(tabla_df) <- c("Variable", nombres_modelos)
+
+# ── Bondad de ajuste ──────────────────────────────────────────
+gof_filas <- do.call(rbind, lapply(modelos_comparacion, function(m) {
+  s <- summary(m)
+  c(
+    N      = formatC(nobs(m), format = "d", big.mark = ","),
+    R2     = formatC(round(s$r.squared,      3), format = "f", digits = 3),
+    R2_adj = formatC(round(s$adj.r.squared,  3), format = "f", digits = 3)
+  )
+}))
+
+gof_df <- data.frame(
+  Variable         = c("Observaciones", "R²", "R² ajustado"),
+  t(gof_filas),
+  stringsAsFactors = FALSE,
+  check.names      = FALSE
+)
+colnames(gof_df) <- c("Variable", nombres_modelos)
+
+tabla_final <- rbind(tabla_df, gof_df)
+
+# ── Identificar filas de coeficientes (impares) y SE (pares) ──
+filas_coef <- seq(1, nrow(tabla_df), by = 2)   # coeficientes
+filas_se   <- seq(2, nrow(tabla_df), by = 2)   # errores estándar
+filas_gof  <- (nrow(tabla_df) + 1):nrow(tabla_final)
+
+# ── Render con kableExtra ─────────────────────────────────────
+tabla_final %>%
+  kbl(
+    caption  = "Tabla 6. Comparación de especificaciones del modelo hedónico — Variable dependiente: ln(Precio de venta)",
+    align    = c("l", "c", "c", "c"),
+    booktabs = TRUE,
+    escape   = FALSE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "condensed"),
+    full_width        = TRUE,
+    font_size         = 12
+  ) %>%
+  # Encabezado azul
+  row_spec(0,
+    bold       = TRUE,
+    background = "#2E74B5",
+    color      = "white"
+  ) %>%
+  # Filas de coeficientes: negrita
+  row_spec(filas_coef,
+    bold       = TRUE,
+    background = "#FFFFFF"
+  ) %>%
+  # Filas de errores estándar: gris claro, texto pequeño
+  row_spec(filas_se,
+    color      = "#666666",
+    background = "#FAFAFA",
+    italic     = TRUE
+  ) %>%
+  # Separador antes de bondad de ajuste
+  row_spec(nrow(tabla_df),
+    extra_css = "border-bottom: 2px solid #2E74B5;"
+  ) %>%
+  # Filas GOF: fondo azul muy tenue
+  row_spec(filas_gof,
+    background = "#EBF3FB",
+    bold       = FALSE
+  ) %>%
+  # Variable destacada: columna izquierda negrita
+  column_spec(1, bold = TRUE, width = "14em") %>%
+  # Grupos de variables
+  pack_rows("Variable de interés ambiental", 1,  4, bold = TRUE, color = "#2E74B5") %>%
+  pack_rows("Variables de control",          5, 16, bold = TRUE, color = "#2E74B5") %>%
+  footnote(
+    general = paste0(
+      "Errores estándar robustos HC1 entre paréntesis. ",
+      "+ p < 0.1, * p < 0.05, ** p < 0.01, *** p < 0.001. ",
+      "EF = Efectos fijos de localidad. ",
+      "Modelo log-log sin EF es la especificación preferida."
+    ),
+    general_title = "Nota:",
+    footnote_as_chunk = TRUE
+  )
 ```
 
 ###17.2 Calculo del MWTP y tasa pigouviana
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+```{r seccion-17-2, echo=FALSE, warning=FALSE, message=FALSE}
 
-# ============================================================
-# MWTP y tasa pigouviana — modelo log-log
-# dP/dc = (β / c̄) × P̄
-# ============================================================
-
-beta_loglog  <- robusto_loglog["ln_pm2_5_exp", 1]      # -0.02365
+# ── Cálculos ──────────────────────────────────────────────────
+beta_loglog  <- robusto_loglog[, 1]["ln_pm2_5_exp"]   # extrae por posición segura
 precio_medio <- mean(datos$precio_venta, na.rm = TRUE)
 c_medio      <- mean(datos$pm2_5_exp,    na.rm = TRUE)
+mwtp_cop     <- (beta_loglog / c_medio) * precio_medio
+N            <- nrow(datos)
+t_unitario   <- abs(mwtp_cop)
+t_agregado   <- t_unitario * N
 
-mwtp_cop <- (beta_loglog / c_medio) * precio_medio
+# ── Tabla 1: MWTP y tasa pigouviana ──────────────────────────
+tabla_mwtp <- data.frame(
+  Concepto = c(
+    "β — elasticidad ln(PM2.5)",
+    "PM2.5 medio estimado (c̄)",
+    "Precio de venta medio (P̄)",
+    "MWTP marginal por µg/m³",
+    "N inmuebles en muestra",
+    "t* unitario (por inmueble)",
+    "t* agregado (muestra total)"
+  ),
+  Valor = c(
+    formatC(round(beta_loglog,  4), format = "f", digits = 4),
+    paste0(formatC(round(c_medio, 2), format = "f", digits = 2), " µg/m³"),
+    paste0("$", format(round(precio_medio), big.mark = ","), " COP"),
+    paste0("$", format(round(mwtp_cop),     big.mark = ","), " COP / µg/m³"),
+    format(N, big.mark = ","),
+    paste0("$", format(round(t_unitario),        big.mark = ","), " COP / µg/m³"),
+    paste0("$", format(round(t_agregado / 1e6, 1), big.mark = ","), " MM COP")
+  ),
+  Interpretación = c(
+    "Un 10% más de PM2.5 reduce el precio en 0.24%",
+    "Concentración media en inmuebles de la muestra",
+    "Precio de lista promedio — Bogotá D.C., 2026",
+    "Pérdida de valor por cada µg/m³ adicional de PM2.5",
+    "Inmuebles en venta con datos completos",
+    "Daño capitalizado por inmueble — base del impuesto óptimo",
+    "Costo social total internalizable vía impuesto pigouviano"
+  ),
+  stringsAsFactors = FALSE
+)
 
-cat("=== MWTP MARGINAL ===\n")
-cat("β (elasticidad):    ", round(beta_loglog, 4), "\n")
-cat("PM2.5 medio (c̄):   ", round(c_medio, 2), "µg/m³\n")
-cat("Precio medio (P̄):  ", format(round(precio_medio), big.mark=","), "COP\n")
-cat("MWTP por µg/m³:    ", format(round(mwtp_cop), big.mark=","), "COP\n\n")
+tabla_mwtp %>%
+  kbl(
+    caption  = "Tabla 7. MWTP marginal y tasa pigouviana óptima — Modelo log-log",
+    align    = c("l", "r", "l"),
+    booktabs = TRUE,
+    escape   = FALSE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "condensed"),
+    full_width        = TRUE,
+    font_size         = 12
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  # Parámetros del modelo
+  row_spec(1:3, background = "#EBF3FB") %>%
+  # MWTP — resultado central
+  row_spec(4, bold = TRUE, background = "#D0E8FF",
+           extra_css = "border-top: 2px solid #2E74B5; border-bottom: 1px solid #2E74B5;") %>%
+  # Tasa pigouviana
+  row_spec(5,   background = "#F0F7EF") %>%
+  row_spec(6,   background = "#F0F7EF") %>%
+  row_spec(7,   bold = TRUE, background = "#D4EDDA",
+           extra_css = "border-top: 1px solid #34A853; border-bottom: 2px solid #34A853;") %>%
+  column_spec(1, bold = TRUE, width = "16em") %>%
+  column_spec(2, width = "14em") %>%
+  column_spec(3, width = "20em", color = "#444444", italic = TRUE) %>%
+  pack_rows("Parámetros estimados",  1, 3, bold = TRUE, color = "#2E74B5") %>%
+  pack_rows("MWTP marginal",         4, 4, bold = TRUE, color = "#2E74B5") %>%
+  pack_rows("Tasa pigouviana (t*)",  5, 7, bold = TRUE, color = "#34A853") %>%
+  footnote(
+    general = paste0(
+      "MWTP: disposición marginal a pagar. ",
+      "Fórmula: MWTP = (β / c̄) × P̄. ",
+      "t* unitario = |MWTP|. ",
+      "t* agregado = |MWTP| × N. ",
+      "Fuente: modelo hedónico log-log con errores robustos HC1."
+    ),
+    general_title     = "Nota:",
+    footnote_as_chunk = TRUE
+  )
+```
+### 17.3 Escenarios de reducción de PM2.5 y ganancia de bienestar
+```{r seccion-17-2-escenarios, echo=FALSE, warning=FALSE, message=FALSE}
 
-# Tasa pigouviana
-N          <- nrow(datos)
-t_unitario <- abs(mwtp_cop)
-t_agregado <- t_unitario * N
-
-cat("=== TASA PIGOUVIANA ===\n")
-cat("t* por inmueble:   ", format(round(t_unitario), big.mark=","), "COP/µg/m³\n")
-cat("t* agregado (N=", N, "):", format(round(t_agregado/1e6, 1), big.mark=","), "MM COP\n\n")
-
-# Escenarios de ganancia de bienestar
+# ── Tabla 2: escenarios de bienestar ─────────────────────────
 escenarios <- tibble(reduccion_pct = c(10, 20, 30, 50)) %>%
   mutate(
-    delta_c      = c_medio * reduccion_pct / 100,
+    delta_c       = c_medio * reduccion_pct / 100,
     ganancia_unit = abs(mwtp_cop) * delta_c,
     ganancia_agr  = ganancia_unit * N / 1e6
   )
 
-print(escenarios)
-
+escenarios %>%
+  mutate(
+    `Reducción PM2.5` = paste0(reduccion_pct, "%"),
+    `Δc (µg/m³)`      = formatC(round(delta_c, 2),   format = "f", digits = 2),
+    `ΔW por inmueble` = paste0("$", format(round(ganancia_unit), big.mark = ",")),
+    `ΔW agregado`     = paste0("$", formatC(round(ganancia_agr, 1),
+                                format = "f", digits = 1), " MM COP")
+  ) %>%
+  select(`Reducción PM2.5`, `Δc (µg/m³)`, `ΔW por inmueble`, `ΔW agregado`) %>%
+  kbl(
+    caption  = "Tabla 8. Ganancia de bienestar por escenarios de reducción de PM2.5",
+    align    = c("c", "r", "r", "r"),
+    booktabs = TRUE,
+    escape   = FALSE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "condensed"),
+    full_width        = FALSE,
+    position          = "center",
+    font_size         = 12
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  row_spec(1, background = "#FFFFFF") %>%
+  row_spec(2, background = "#F5F5F5") %>%
+  row_spec(3, background = "#EBF3FB") %>%
+  row_spec(4, bold = TRUE, background = "#D4EDDA",
+           extra_css = "border-top: 1px solid #34A853;") %>%
+  column_spec(1, bold = TRUE, width = "10em") %>%
+  column_spec(2, width = "8em") %>%
+  column_spec(3, width = "12em") %>%
+  column_spec(4, width = "12em") %>%
+  footnote(
+    general = paste0(
+      "ΔW = |β / c̄ × P̄| × Δc × N. ",
+      "Δc = reducción absoluta en concentración media de PM2.5. ",
+      "N = ", format(N, big.mark = ","), " inmuebles. ",
+      "Valores a precios de lista — Bogotá D.C., 2026."
+    ),
+    general_title     = "Nota:",
+    footnote_as_chunk = TRUE
+  )
 ```
+
+Corregir
+---------
+```{r setup-exportar, include=FALSE}
+
+# ── Crear estructura de carpetas ──────────────────────────────
+dir.create("outputs/tablas",  recursive = TRUE, showWarnings = FALSE)
+dir.create("outputs/figuras", recursive = TRUE, showWarnings = FALSE)
+
+cat("Carpetas creadas:\n")
+cat("  outputs/tablas/  — tablas en PNG de alta resolución\n")
+cat("  outputs/figuras/ — gráficos en PNG y PDF\n")
+```
+
+```{r funcion-guardar-tabla, include=FALSE}
+
+# ── Función genérica: guardar tabla kable como PNG ────────────
+guardar_tabla <- function(kable_obj, nombre_archivo, ancho = 1400, alto = NULL) {
+
+  ruta_html <- file.path("outputs/tablas", paste0(nombre_archivo, ".html"))
+  ruta_png  <- file.path("outputs/tablas", paste0(nombre_archivo, ".png"))
+
+  # Guardar HTML temporal
+  save_kable(kable_obj, file = ruta_html, self_contained = TRUE)
+
+  # Convertir a PNG con webshot2 (alta resolución)
+  webshot2::webshot(
+    url    = ruta_html,
+    file   = ruta_png,
+    zoom   = 3,          # 3x = ~300 dpi equivalente
+    vwidth = ancho,
+    vheight = if (is.null(alto)) 400 else alto,
+    cliprect = "viewport"
+  )
+
+  cat("✓ Tabla guardada:", ruta_png, "\n")
+  invisible(ruta_png)
+}
+
+# ── Función genérica: guardar ggplot como PNG y PDF ───────────
+guardar_figura <- function(plot_obj, nombre_archivo,
+                           ancho_cm = 20, alto_cm = 14, dpi = 300) {
+
+  ruta_png <- file.path("outputs/figuras", paste0(nombre_archivo, ".png"))
+  ruta_pdf <- file.path("outputs/figuras", paste0(nombre_archivo, ".pdf"))
+
+  ggsave(ruta_png, plot = plot_obj,
+         width = ancho_cm, height = alto_cm, units = "cm",
+         dpi = dpi, bg = "white")
+
+  ggsave(ruta_pdf, plot = plot_obj,
+         width = ancho_cm, height = alto_cm, units = "cm",
+         device = cairo_pdf, bg = "white")
+
+  cat("✓ Figura guardada:", ruta_png, "\n")
+  cat("✓ Figura guardada:", ruta_pdf, "\n")
+  invisible(list(png = ruta_png, pdf = ruta_pdf))
+}
+```
+
+---
+
+### Exportar tablas descriptivas
+
+```{r exportar-tablas-descriptivas, echo=FALSE, warning=FALSE, message=FALSE}
+
+# ── Tabla 1: composición general ─────────────────────────────
+t1 <- resumen_general %>%
+  kbl(caption = "Tabla 1. Composición general de la muestra",
+      align = c("l","r"), booktabs = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE, font_size = 13) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE, width = "14em") %>%
+  column_spec(2, width = "8em")
+
+guardar_tabla(t1, "tabla_01_composicion_muestra")
+
+# ── Tabla 2: tipo de inmueble ─────────────────────────────────
+t2 <- tabla_tipo %>%
+  kbl(caption = "Tabla 2. Características por tipo de inmueble",
+      align = c("l","r","r","r","r","r","r"), booktabs = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE, font_size = 13) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white")
+
+guardar_tabla(t2, "tabla_02_tipo_inmueble")
+
+# ── Tabla 3: localidades ──────────────────────────────────────
+t3 <- tabla_loc %>%
+  kbl(caption = "Tabla 3. Distribución de inmuebles y precios por localidad",
+      align = c("l","r","r","r","r","r","r","r"), booktabs = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = TRUE, font_size = 12) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE) %>%
+  footnote(general = "NaN indica ausencia de ese tipo en la localidad.",
+           general_title = "Nota:")
+
+guardar_tabla(t3, "tabla_03_localidades", ancho = 1800)
+
+# ── Tabla 4: estaciones ───────────────────────────────────────
+t4 <- tabla_est %>%
+  kbl(caption = "Tabla 4. Estaciones de monitoreo — RMCAB Bogotá",
+      booktabs = TRUE,
+      align = c("l","c","l","l","l","r","r","r","r")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = TRUE, font_size = 11) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE) %>%
+  footnote(general = "RMCAB: Red de Monitoreo de Calidad del Aire de Bogotá.",
+           general_title = "Nota:")
+
+guardar_tabla(t4, "tabla_04_estaciones", ancho = 1800)
+
+# ── Tabla 5: contaminantes ────────────────────────────────────
+t5 <- tabla_cont %>%
+  kbl(caption = "Tabla 5. Estadísticas descriptivas PM2.5 y PM10",
+      booktabs = TRUE, align = c("l","r","r","r","r","r")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE, font_size = 12) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  pack_rows("Medición directa en estación",       1, 2) %>%
+  pack_rows("Concentración estimada en inmueble", 3, 4) %>%
+  footnote(general = "OMS: PM2.5 ≤ 5 µg/m³ | PM10 ≤ 15 µg/m³ (anual).",
+           general_title = "Nota:")
+
+guardar_tabla(t5, "tabla_05_contaminantes")
+```
+
+---
+
+### Exportar figuras descriptivas
+
+```{r exportar-figuras-descriptivas, echo=FALSE, warning=FALSE, message=FALSE}
+
+# ── Figura 1: boxplot precios por tipo ───────────────────────
+fig1 <- datos %>%
+  mutate(tipo = str_to_title(tipo_inmueble)) %>%
+  ggplot(aes(x = tipo, y = precio_venta / 1e6, fill = tipo)) +
+  geom_boxplot(outlier.shape = 21, outlier.size = 1.5,
+               outlier.alpha = 0.4, width = 0.5, alpha = 0.85) +
+  scale_fill_manual(values = c("Apartamento" = "#2E74B5", "Casa" = "#34A853")) +
+  scale_y_log10(labels = label_number(suffix = " MM", big.mark = ",")) +
+  labs(title    = "Distribución del precio de venta por tipo de inmueble",
+       subtitle = "Escala logarítmica — Bogotá D.C., 2026",
+       x = NULL, y = "Precio de venta (MM COP, escala log)",
+       caption = "Fuente: Metrocuadrado.com. Elaboración propia.") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none",
+        plot.title    = element_text(face = "bold", size = 13),
+        plot.subtitle = element_text(color = "grey40", size = 11),
+        panel.grid.minor = element_blank())
+
+guardar_figura(fig1, "figura_01_boxplot_precios_tipo",
+               ancho_cm = 16, alto_cm = 12)
+
+# ── Figura 2: barras localidades ─────────────────────────────
+p1 <- datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  count(loc) %>% mutate(loc = fct_reorder(loc, n)) %>%
+  ggplot(aes(x = n, y = loc)) +
+  geom_col(fill = "#2E74B5", alpha = 0.85) +
+  geom_text(aes(label = n), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "N inmuebles", y = NULL, title = "Cantidad por localidad") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold", size = 12))
+
+p2 <- datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  group_by(loc) %>%
+  summarise(precio_medio = mean(precio_venta, na.rm = TRUE) / 1e6, .groups = "drop") %>%
+  mutate(loc = fct_reorder(loc, precio_medio)) %>%
+  ggplot(aes(x = precio_medio, y = loc)) +
+  geom_col(fill = "#34A853", alpha = 0.85) +
+  geom_text(aes(label = round(precio_medio, 0)), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = "Precio medio (MM COP)", y = NULL, title = "Precio medio por localidad") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold", size = 12))
+
+fig2 <- p1 + p2 +
+  plot_annotation(caption = "Fuente: Metrocuadrado.com. Elaboración propia.")
+
+guardar_figura(fig2, "figura_02_barras_localidades",
+               ancho_cm = 26, alto_cm = 16)
+
+# ── Figura 3: mapa ────────────────────────────────────────────
+# (reutilizar el objeto guardado si lo asignaste; si no, regenerar)
+# fig3 <- <tu código del mapa>
+# guardar_figura(fig3, "figura_03_mapa_inmuebles_estaciones",
+#                ancho_cm = 20, alto_cm = 22)
+
+# ── Figura 4: contaminantes por localidad ────────────────────
+fig4 <- datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  group_by(loc) %>%
+  summarise(pm2_5 = mean(pm2_5_exp, na.rm = TRUE),
+            pm10  = mean(pm10_exp,  na.rm = TRUE), .groups = "drop") %>%
+  pivot_longer(c(pm2_5, pm10), names_to = "contaminante", values_to = "valor") %>%
+  mutate(contaminante = ifelse(contaminante == "pm2_5",
+                               "PM2.5 (µg/m³)", "PM10 (µg/m³)"),
+         loc = fct_reorder(loc, valor)) %>%
+  ggplot(aes(x = valor, y = loc, fill = contaminante)) +
+  geom_col(position = "dodge", alpha = 0.85, width = 0.7) +
+  geom_vline(data = tibble(contaminante = c("PM2.5 (µg/m³)", "PM10 (µg/m³)"),
+                           umbral = c(5, 15)),
+             aes(xintercept = umbral),
+             linetype = "dashed", color = "#B22222", linewidth = 0.7) +
+  scale_fill_manual(values = c("PM2.5 (µg/m³)" = "#2E74B5",
+                               "PM10 (µg/m³)"  = "#F4A300")) +
+  facet_wrap(~ contaminante, scales = "free_x") +
+  labs(title    = "Concentración media estimada de PM2.5 y PM10 por localidad",
+       subtitle = "Línea roja: límite guía OMS",
+       x = "Concentración media estimada (µg/m³)", y = NULL, fill = NULL,
+       caption = "Fuente: RMCAB — modelo de decaimiento exponencial. Elaboración propia.") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none",
+        strip.text    = element_text(face = "bold", size = 12),
+        plot.title    = element_text(face = "bold", size = 12),
+        plot.subtitle = element_text(color = "grey40", size = 10))
+
+guardar_figura(fig4, "figura_04_contaminantes_localidad",
+               ancho_cm = 24, alto_cm = 14)
+
+# ── Figura 5: distribución precio + QQ ───────────────────────
+p_hist <- ggplot(datos, aes(x = ln_precio_venta)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40,
+                 fill = "#2E74B5", alpha = 0.75, color = "white") +
+  geom_density(color = "#B22222", linewidth = 1) +
+  labs(title = "Distribución de ln(Precio de venta)",
+       x = "ln(Precio de venta)", y = "Densidad") +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold"))
+
+p_qq <- ggplot(datos, aes(sample = ln_precio_venta)) +
+  stat_qq(color = "#2E74B5", alpha = 0.4, size = 0.8) +
+  stat_qq_line(color = "#B22222", linewidth = 1) +
+  labs(title = "Q-Q plot de ln(Precio de venta)",
+       x = "Cuantiles teóricos", y = "Cuantiles observados") +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold"))
+
+fig5 <- p_hist + p_qq +
+  plot_annotation(
+    subtitle = "La transformación logarítmica aproxima la distribución a la normalidad",
+    caption  = "Fuente: Metrocuadrado.com. Elaboración propia.",
+    theme    = theme(plot.subtitle = element_text(color = "grey40", size = 10))
+  )
+
+guardar_figura(fig5, "figura_05_distribucion_precio",
+               ancho_cm = 22, alto_cm = 12)
+
+# ── Figura 6: gradiente espacial ─────────────────────────────
+fig6 <- ggplot(datos, aes(x = ln_pm2_5_exp, y = ln_precio_venta)) +
+  geom_point(aes(color = str_to_title(localidad_oficial_ideca)),
+             alpha = 0.35, size = 1.2) +
+  geom_smooth(method = "lm", formula = y ~ x, color = "#B22222",
+              linewidth = 1.2, se = TRUE, fill = "#B22222", alpha = 0.12) +
+  scale_color_viridis_d(option = "turbo", name = "Localidad") +
+  labs(title    = "Gradiente espacial: contaminación PM2.5 vs precio de venta",
+       subtitle = "Cada punto es un inmueble. Línea roja: ajuste MCO (log-log)",
+       x = "ln(PM2.5 estimado, µg/m³)", y = "ln(Precio de venta, COP)",
+       caption = "Fuente: Metrocuadrado.com y RMCAB. Elaboración propia.") +
+  theme_minimal(base_size = 11) +
+  theme(plot.title    = element_text(face = "bold", size = 12),
+        plot.subtitle = element_text(color = "grey40", size = 10),
+        legend.key.size = unit(0.4, "cm"),
+        legend.text   = element_text(size = 8))
+
+guardar_figura(fig6, "figura_06_gradiente_espacial",
+               ancho_cm = 22, alto_cm = 14)
+```
+
+---
+
+### Exportar tablas del modelo
+
+```{r exportar-tablas-modelo, echo=FALSE, warning=FALSE, message=FALSE}
+
+# ── Tabla 6: comparación de modelos ──────────────────────────
+guardar_tabla(nombres_modelos, "tabla_06_comparacion_modelos", ancho = 1600)
+
+# ── Tabla 7: resultados modelo final ─────────────────────────
+guardar_tabla(tabla_final,  "tabla_07_modelo_loglog_final", ancho = 1600)
+
+# ── Tabla 8: MWTP y tasa pigouviana ──────────────────────────
+guardar_tabla(tabla_mwtp, "tabla_08_mwtp_pigouviana",     ancho = 1600)
+
+# ── Tabla 9: escenarios de bienestar ─────────────────────────
+guardar_tabla(escenarios,  "tabla_09_escenarios_bienestar")
+
+cat("\n=== EXPORTACIÓN COMPLETA ===\n")
+cat("Tablas  → outputs/tablas/   (PNG, zoom 3x)\n")
+cat("Figuras → outputs/figuras/  (PNG 300 dpi + PDF vectorial)\n")
+```
+
+
+---------
 
 ###18. Extraer los resultados
 ```{r ECHO=FALSE, warning=FALSE, message=FALSE}
