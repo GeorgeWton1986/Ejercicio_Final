@@ -1028,7 +1028,7 @@ tabla_final <- rbind(tabla_modelo, gof)
 filas_gof_idx <- (n_coef + 1):nrow(tabla_final)
 
 # ── Render ────────────────────────────────────────────────────
-tabla_final %>%
+t6 <-tabla_final %>%
   kbl(
     caption   = "Tabla 6. Resultados del modelo hedónico log-log — Variable dependiente: ln(Precio de venta)",
     align     = c("l", "r", "r", "r", "r"),
@@ -1159,9 +1159,9 @@ filas_se   <- seq(2, nrow(tabla_df), by = 2)   # errores estándar
 filas_gof  <- (nrow(tabla_df) + 1):nrow(tabla_final)
 
 # ── Render con kableExtra ─────────────────────────────────────
-tabla_final %>%
+t7 <-tabla_final %>%
   kbl(
-    caption  = "Tabla 6. Comparación de especificaciones del modelo hedónico — Variable dependiente: ln(Precio de venta)",
+    caption  = "Tabla 7. Comparación de especificaciones del modelo hedónico — Variable dependiente: ln(Precio de venta)",
     align    = c("l", "c", "c", "c"),
     booktabs = TRUE,
     escape   = FALSE
@@ -1258,9 +1258,9 @@ tabla_mwtp <- data.frame(
   stringsAsFactors = FALSE
 )
 
-tabla_mwtp %>%
+t8 <-tabla_mwtp %>%
   kbl(
-    caption  = "Tabla 7. MWTP marginal y tasa pigouviana óptima — Modelo log-log",
+    caption  = "Tabla 8. MWTP marginal y tasa pigouviana óptima — Modelo log-log",
     align    = c("l", "r", "l"),
     booktabs = TRUE,
     escape   = FALSE
@@ -1299,10 +1299,11 @@ tabla_mwtp %>%
     footnote_as_chunk = TRUE
   )
 ```
+
 ### 17.3 Escenarios de reducción de PM2.5 y ganancia de bienestar
 ```{r seccion-17-2-escenarios, echo=FALSE, warning=FALSE, message=FALSE}
 
-# ── Tabla 2: escenarios de bienestar ─────────────────────────
+# ── Tabla 9: escenarios de bienestar ─────────────────────────
 escenarios <- tibble(reduccion_pct = c(10, 20, 30, 50)) %>%
   mutate(
     delta_c       = c_medio * reduccion_pct / 100,
@@ -1310,7 +1311,7 @@ escenarios <- tibble(reduccion_pct = c(10, 20, 30, 50)) %>%
     ganancia_agr  = ganancia_unit * N / 1e6
   )
 
-escenarios %>%
+t9 <-escenarios %>%
   mutate(
     `Reducción PM2.5` = paste0(reduccion_pct, "%"),
     `Δc (µg/m³)`      = formatC(round(delta_c, 2),   format = "f", digits = 2),
@@ -1320,7 +1321,7 @@ escenarios %>%
   ) %>%
   select(`Reducción PM2.5`, `Δc (µg/m³)`, `ΔW por inmueble`, `ΔW agregado`) %>%
   kbl(
-    caption  = "Tabla 8. Ganancia de bienestar por escenarios de reducción de PM2.5",
+    caption  = "Tabla 9. Ganancia de bienestar por escenarios de reducción de PM2.5",
     align    = c("c", "r", "r", "r"),
     booktabs = TRUE,
     escape   = FALSE
@@ -1353,64 +1354,6 @@ escenarios %>%
   )
 ```
 
-Corregir
----------
-```{r setup-exportar, include=FALSE}
-
-# ── Crear estructura de carpetas ──────────────────────────────
-dir.create("outputs/tablas",  recursive = TRUE, showWarnings = FALSE)
-dir.create("outputs/figuras", recursive = TRUE, showWarnings = FALSE)
-
-cat("Carpetas creadas:\n")
-cat("  outputs/tablas/  — tablas en PNG de alta resolución\n")
-cat("  outputs/figuras/ — gráficos en PNG y PDF\n")
-```
-
-```{r funcion-guardar-tabla, include=FALSE}
-
-# ── Función genérica: guardar tabla kable como PNG ────────────
-guardar_tabla <- function(kable_obj, nombre_archivo, ancho = 1400, alto = NULL) {
-
-  ruta_html <- file.path("outputs/tablas", paste0(nombre_archivo, ".html"))
-  ruta_png  <- file.path("outputs/tablas", paste0(nombre_archivo, ".png"))
-
-  # Guardar HTML temporal
-  save_kable(kable_obj, file = ruta_html, self_contained = TRUE)
-
-  # Convertir a PNG con webshot2 (alta resolución)
-  webshot2::webshot(
-    url    = ruta_html,
-    file   = ruta_png,
-    zoom   = 3,          # 3x = ~300 dpi equivalente
-    vwidth = ancho,
-    vheight = if (is.null(alto)) 400 else alto,
-    cliprect = "viewport"
-  )
-
-  cat("✓ Tabla guardada:", ruta_png, "\n")
-  invisible(ruta_png)
-}
-
-# ── Función genérica: guardar ggplot como PNG y PDF ───────────
-guardar_figura <- function(plot_obj, nombre_archivo,
-                           ancho_cm = 20, alto_cm = 14, dpi = 300) {
-
-  ruta_png <- file.path("outputs/figuras", paste0(nombre_archivo, ".png"))
-  ruta_pdf <- file.path("outputs/figuras", paste0(nombre_archivo, ".pdf"))
-
-  ggsave(ruta_png, plot = plot_obj,
-         width = ancho_cm, height = alto_cm, units = "cm",
-         dpi = dpi, bg = "white")
-
-  ggsave(ruta_pdf, plot = plot_obj,
-         width = ancho_cm, height = alto_cm, units = "cm",
-         device = cairo_pdf, bg = "white")
-
-  cat("✓ Figura guardada:", ruta_png, "\n")
-  cat("✓ Figura guardada:", ruta_pdf, "\n")
-  invisible(list(png = ruta_png, pdf = ruta_pdf))
-}
-```
 
 ---
 
@@ -1482,8 +1425,6 @@ t5 <- tabla_cont %>%
 guardar_tabla(t5, "tabla_05_contaminantes")
 ```
 
----
-
 ### Exportar figuras descriptivas
 
 ```{r exportar-figuras-descriptivas, echo=FALSE, warning=FALSE, message=FALSE}
@@ -1543,10 +1484,86 @@ guardar_figura(fig2, "figura_02_barras_localidades",
                ancho_cm = 26, alto_cm = 16)
 
 # ── Figura 3: mapa ────────────────────────────────────────────
-# (reutilizar el objeto guardado si lo asignaste; si no, regenerar)
-# fig3 <- <tu código del mapa>
-# guardar_figura(fig3, "figura_03_mapa_inmuebles_estaciones",
-#                ancho_cm = 20, alto_cm = 22)
+
+fig3 <- ggplot() +
+
+  # Polígono Bogotá
+  geom_sf(
+    data      = bogota_poly,
+    fill      = "#F5F5F5",
+    color     = "#AAAAAA",
+    linewidth = 0.5,
+    inherit.aes = FALSE
+  ) +
+
+  # Localidades (solo si OSM devolvió resultados)
+  {if (nrow(localidades_poly) > 0)
+    geom_sf(
+      data        = localidades_poly,
+      fill        = NA,
+      color       = "#CCCCCC",
+      linewidth   = 0.2,
+      inherit.aes = FALSE
+    )
+  } +
+
+  # Inmuebles coloreados por precio
+  geom_point(
+    data  = datos,
+    aes(x = longitud, y = latitud, color = precio_venta / 1e6),
+    size  = 0.7, alpha = 0.45
+  ) +
+  scale_color_gradient(
+    low    = "#FFF3CD",
+    high   = "#B22222",
+    name   = "Precio\n(MM COP)",
+    labels = label_number(big.mark = ",")
+  ) +
+
+  # Estaciones
+  geom_point(
+    data  = estaciones_geo,
+    aes(x = lon, y = lat),
+    shape = 17, size = 4.5, color = "#1A3C6E"
+  ) +
+
+  # Etiquetas
+  geom_label_repel(
+    data         = estaciones_geo,
+    aes(x = lon, y = lat, label = sigla_estacion),
+    size         = 2.6,
+    color        = "#1A3C6E",
+    fill         = "white",
+    label.size   = 0.3,
+    box.padding  = 0.5,
+    max.overlaps = 25,
+    fontface     = "bold"
+  ) +
+
+  # Zoom a la extensión de los datos
+  coord_sf(
+    xlim   = c(min(datos$longitud) - 0.02, max(datos$longitud) + 0.02),
+    ylim   = c(min(datos$latitud)  - 0.02, max(datos$latitud)  + 0.02),
+    expand = FALSE
+  ) +
+
+  labs(
+    title    = "Localización de inmuebles y estaciones de monitoreo",
+    subtitle = "Puntos: inmuebles en venta (color = precio). Triángulos ▲: estaciones RMCAB",
+    x        = "Longitud",
+    y        = "Latitud",
+    caption  = "Fuente: Metrocuadrado.com y RMCAB — Secretaría de Ambiente de Bogotá.\nContorno: © OpenStreetMap contributors."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(color = "grey40", size = 10),
+    legend.position = "right",
+    panel.grid      = element_line(color = "grey90", linewidth = 0.2),
+    axis.text       = element_text(size = 8)
+  )
+guardar_figura(fig3, "figura_03_mapa_inmuebles_estaciones",
+                ancho_cm = 20, alto_cm = 22)
 
 # ── Figura 4: contaminantes por localidad ────────────────────
 fig4 <- datos %>%
@@ -1636,16 +1653,16 @@ guardar_figura(fig6, "figura_06_gradiente_espacial",
 ```{r exportar-tablas-modelo, echo=FALSE, warning=FALSE, message=FALSE}
 
 # ── Tabla 6: comparación de modelos ──────────────────────────
-guardar_tabla(nombres_modelos, "tabla_06_comparacion_modelos", ancho = 1600)
+guardar_tabla(t6, "tabla_06_comparacion_modelos", ancho = 1600)
 
 # ── Tabla 7: resultados modelo final ─────────────────────────
-guardar_tabla(tabla_final,  "tabla_07_modelo_loglog_final", ancho = 1600)
+guardar_tabla(t7,  "tabla_07_modelo_loglog_final", ancho = 1600)
 
 # ── Tabla 8: MWTP y tasa pigouviana ──────────────────────────
-guardar_tabla(tabla_mwtp, "tabla_08_mwtp_pigouviana",     ancho = 1600)
+guardar_tabla(t8, "tabla_08_mwtp_pigouviana",     ancho = 1600)
 
 # ── Tabla 9: escenarios de bienestar ─────────────────────────
-guardar_tabla(escenarios,  "tabla_09_escenarios_bienestar")
+guardar_tabla(t9,  "tabla_09_escenarios_bienestar")
 
 cat("\n=== EXPORTACIÓN COMPLETA ===\n")
 cat("Tablas  → outputs/tablas/   (PNG, zoom 3x)\n")
@@ -1653,7 +1670,7 @@ cat("Figuras → outputs/figuras/  (PNG 300 dpi + PDF vectorial)\n")
 ```
 
 
----------
+####---------
 
 ###18. Extraer los resultados
 ```{r ECHO=FALSE, warning=FALSE, message=FALSE}
