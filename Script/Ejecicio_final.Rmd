@@ -42,7 +42,12 @@ p_load(haven,        #Leer archivos .dta
        countreg,      #Modelos de conteo
        VGAM,          #Modelos de conteo
        margins,       #Efectos marginales en modelos no lineales
-       survival       #Modelos de supervivencia
+       survival,      #Modelos de supervivencia
+       scales,        #Formateo de ejes en gráficos
+       patchwork,     #Combinar gráficos
+       ggrepel,       #Etiquetas en gráficos sin solapamiento
+       osmdata,       #Descargar contornos desde OpenStreetMap (sin API key)
+       sf             #Manejo de datos espaciales
       )
 ```
 
@@ -125,6 +130,557 @@ datos <- datos %>%
       as.numeric(distancia_estacion_km)
     )
     
+  )
+
+datos <- datos %>%
+  mutate(
+    ln_precio_venta = ifelse(precio_venta > 0, log(precio_venta), NA),
+    ln_pm2_5_exp    = ifelse(pm2_5_exp    > 0, log(pm2_5_exp),   NA)
+  )
+```
+
+### 6.1 Tamaño y composición de la muestra
+```{r tabla-tamano}
+resumen_general <- datos %>%
+  summarise(
+    `Total inmuebles`              = n(),
+    `Apartamentos`                 = sum(tipo_inmueble == "apartamento", na.rm = TRUE),
+    `Casas`                        = sum(tipo_inmueble == "casa",        na.rm = TRUE),
+    `Localidades cubiertas`        = n_distinct(localidad_oficial_ideca),
+    `Estaciones de monitoreo`      = n_distinct(sigla_estacion),
+    `Precio medio (MM COP)`        = round(mean(precio_venta,  na.rm = TRUE) / 1e6, 1),
+    `Precio mediano (MM COP)`      = round(median(precio_venta, na.rm = TRUE) / 1e6, 1),
+    `PM2.5 medio estimado (µg/m³)` = round(mean(pm2_5_exp,    na.rm = TRUE), 2)
+  ) %>%
+  pivot_longer(everything(), names_to = "Indicador", values_to = "Valor")
+
+resumen_general %>%
+  kbl(
+    caption  = "Tabla 1. Composición general de la muestra",
+    align    = c("l", "r"),
+    booktabs = TRUE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position   = "center",
+    font_size  = 13
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE, width = "14em") %>%
+  column_spec(2, width = "8em")
+```
+
+### 6.2 Muestra por tipo de inmueble: apartamentos y casas
+```{r tabla-tipo-zona}
+tabla_tipo <- datos %>%
+  mutate(tipo = str_to_title(tipo_inmueble)) %>%
+  group_by(`Tipo` = tipo) %>%
+  summarise(
+    `N`                     = n(),
+    `Precio medio (MM COP)` = round(mean(precio_venta,                    na.rm = TRUE) / 1e6, 1),
+    `Precio p25 (MM COP)`   = round(quantile(precio_venta, 0.25,          na.rm = TRUE) / 1e6, 1),
+    `Precio p75 (MM COP)`   = round(quantile(precio_venta, 0.75,          na.rm = TRUE) / 1e6, 1),
+    `Área media (m²)`       = round(mean(area_m2,                         na.rm = TRUE), 0),
+    `Estrato medio`         = round(mean(estrato,                         na.rm = TRUE), 1),
+    .groups = "drop"
+  )
+
+tabla_tipo %>%
+  kbl(
+    caption  = "Tabla 2. Características por tipo de inmueble",
+    align    = c("l", "r", "r", "r", "r", "r", "r"),
+    booktabs = TRUE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position   = "center",
+    font_size  = 13
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white")
+```
+```{r grafico-boxplot-tipo, fig.cap="Figura 1. Distribución del precio de venta por tipo de inmueble"}
+# CORRECCIÓN 3: scales::label_comma() en lugar de comma_format()
+datos %>%
+  mutate(tipo = str_to_title(tipo_inmueble)) %>%
+  ggplot(aes(x = tipo, y = precio_venta / 1e6, fill = tipo)) +
+  geom_boxplot(
+    outlier.shape = 21, outlier.size = 1.5,
+    outlier.alpha = 0.4, width = 0.5, alpha = 0.85
+  ) +
+  scale_fill_manual(values = c("Apartamento" = "#2E74B5", "Casa" = "#34A853")) +
+  scale_y_log10(labels = label_number(suffix = " MM", big.mark = ",")) +
+  labs(
+    title    = "Distribución del precio de venta por tipo de inmueble",
+    subtitle = "Escala logarítmica — Bogotá D.C., 2026",
+    x        = NULL,
+    y        = "Precio de venta (MM COP, escala log)",
+    caption  = "Fuente: Metrocuadrado.com. Elaboración propia."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position  = "none",
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(color = "grey40", size = 11),
+    panel.grid.minor = element_blank(),
+    axis.text        = element_text(size = 11)
+  )
+```
+
+### 6.3 Localización por localidades
+```{r tabla-localidades}
+tabla_loc <- datos %>%
+  mutate(tipo = str_to_title(tipo_inmueble)) %>%
+  group_by(`Localidad` = str_to_title(localidad_oficial_ideca)) %>%
+  summarise(
+    `N total`               = n(),
+    `N aptos`               = sum(tipo == "Apartamento", na.rm = TRUE),
+    `N casas`               = sum(tipo == "Casa",        na.rm = TRUE),
+    `Precio medio (MM COP)` = round(mean(precio_venta,                          na.rm = TRUE) / 1e6, 1),
+    `Precio aptos (MM COP)` = round(mean(precio_venta[tipo == "Apartamento"],   na.rm = TRUE) / 1e6, 1),
+    `Precio casas (MM COP)` = round(mean(precio_venta[tipo == "Casa"],          na.rm = TRUE) / 1e6, 1),
+    `Estrato medio`         = round(mean(estrato,                               na.rm = TRUE), 1),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(`N total`))
+
+tabla_loc %>%
+  kbl(
+    caption  = "Tabla 3. Distribución de inmuebles y precios por localidad",
+    align    = c("l", "r", "r", "r", "r", "r", "r", "r"),
+    booktabs = TRUE
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = TRUE,
+    font_size         = 12
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE) %>%
+  footnote(
+    general       = "Los campos con NaN indican ausencia de ese tipo de inmueble en la localidad.",
+    general_title = "Nota:"
+  )
+```
+
+```{r grafico-localidades, fig.height=6, fig.cap="Figura 2. Número de inmuebles y precio medio por localidad"}
+p1 <- datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  count(loc) %>%
+  mutate(loc = fct_reorder(loc, n)) %>%
+  ggplot(aes(x = n, y = loc)) +
+  geom_col(fill = "#2E74B5", alpha = 0.85) +
+  geom_text(aes(label = n), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "N inmuebles", y = NULL, title = "Cantidad por localidad") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold", size = 12))
+
+p2 <- datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  group_by(loc) %>%
+  summarise(precio_medio = mean(precio_venta, na.rm = TRUE) / 1e6, .groups = "drop") %>%
+  mutate(loc = fct_reorder(loc, precio_medio)) %>%
+  ggplot(aes(x = precio_medio, y = loc)) +
+  geom_col(fill = "#34A853", alpha = 0.85) +
+  geom_text(aes(label = round(precio_medio, 0)), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = "Precio medio (MM COP)", y = NULL, title = "Precio medio por localidad") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(),
+        plot.title = element_text(face = "bold", size = 12))
+
+p1 + p2 +
+  plot_annotation(caption = "Fuente: Metrocuadrado.com. Elaboración propia.")
+```
+
+### 6.4 Localización y características de las estaciones de monitoreo
+```{r tabla-estaciones}
+tabla_est <- datos %>%
+  group_by(
+    `Estación`      = estacion_meteorologica_mas_cercana,
+    `Sigla`         = sigla_estacion,
+    `Localidad`     = str_to_title(localidad_estacion),
+    `Tipo zona`     = tipo_zona_estacion,
+    `Tipo estación` = tipo_estacion
+  ) %>%
+  summarise(
+    `N inmuebles`        = n(),
+    `PM2.5 med. (µg/m³)` = round(mean(pm2_5,           na.rm = TRUE), 1),
+    `PM10 med. (µg/m³)`  = round(mean(pm10,            na.rm = TRUE), 1),
+    `Altitud (m)`        = round(mean(altitud_estacion_m, na.rm = TRUE), 0),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(`N inmuebles`))
+
+tabla_est %>%
+  kbl(
+    caption  = "Tabla 4. Estaciones de monitoreo atmosférico — RMCAB Bogotá",
+    booktabs = TRUE,
+    align    = c("l", "c", "l", "l", "l", "r", "r", "r", "r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = TRUE,
+    font_size         = 11
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  column_spec(1, bold = TRUE) %>%
+  footnote(
+    general       = "RMCAB: Red de Monitoreo de Calidad del Aire de Bogotá. Fuente: ambientebogota.gov.co",
+    general_title = "Nota:"
+  )
+```
+
+```{r mapa-estaciones, fig.height=7, fig.cap="Figura 3. Mapa de estaciones de monitoreo e inmuebles — Bogotá D.C."}
+
+# Crear un dataframe con la ubicación de las estaciones (latitud, longitud) y su sigla para el mapa
+estaciones_geo <- datos %>%
+  distinct(
+    sigla_estacion,
+    estacion_meteorologica_mas_cercana,
+    lat_estacion, lon_estacion,
+    pm2_5, pm10, tipo_zona_estacion
+  ) %>%
+  rename(
+    nombre = estacion_meteorologica_mas_cercana,
+    lat    = lat_estacion,
+    lon    = lon_estacion
+  )
+
+# Mapa de inmuebles y estaciones
+ggplot() +
+  geom_point(
+    data  = datos,
+    aes(x = longitud, y = latitud, color = precio_venta / 1e6),
+    size  = 0.6, alpha = 0.4
+  ) +
+  scale_color_gradient(
+    low    = "#FFF3CD",
+    high   = "#B22222",
+    name   = "Precio\n(MM COP)",
+    labels = label_number(big.mark = ",")
+  ) +
+  geom_point(
+    data  = estaciones_geo,
+    aes(x = lon, y = lat),
+    shape = 17, size = 4, color = "#1A3C6E"
+  ) +
+  geom_label_repel(
+    data         = estaciones_geo,
+    aes(x = lon, y = lat, label = sigla_estacion),
+    size         = 2.8,
+    color        = "#1A3C6E",
+    fill         = "white",
+    label.size   = 0.3,
+    box.padding  = 0.4,
+    max.overlaps = 20,
+    fontface     = "bold"
+  ) +
+  coord_fixed(ratio = 1.2) +
+  labs(
+    title    = "Localización de inmuebles y estaciones de monitoreo",
+    subtitle = "Puntos: inmuebles en venta (color = precio). Triángulos ▲: estaciones RMCAB",
+    x        = "Longitud",
+    y        = "Latitud",
+    caption  = "Fuente: Metrocuadrado.com y RMCAB — Secretaría de Ambiente de Bogotá. Elaboración propia."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(color = "grey40", size = 10),
+    legend.position = "right",
+    panel.grid      = element_line(color = "grey90", linewidth = 0.3)
+  )
+```
+
+```{r mapa-estaciones, fig.height=7, fig.cap="Figura 3. Mapa de estaciones de monitoreo e inmuebles — Bogotá D.C."}
+
+library(osmdata)
+library(sf)
+
+# ── Contorno de Bogotá desde OSM ─────────────────────────────
+bogota_boundary <- opq(bbox = "Bogotá, Colombia") %>%
+  add_osm_feature(key = "admin_level", value = "8") %>%
+  osmdata_sf()
+
+# CORRECCIÓN: usar sf::st_as_sf + subset() en lugar de dplyr::filter/slice
+bogota_poly <- bogota_boundary$osm_multipolygons
+
+# Filtrar el polígono principal con base R (evita conflicto dplyr/sf)
+idx <- which(grepl("Bogot", bogota_poly$name, ignore.case = TRUE))
+if (length(idx) > 0) {
+  bogota_poly <- bogota_poly[idx[1], ]
+}
+
+# ── Contornos de localidades ──────────────────────────────────
+localidades_osm <- opq(bbox = "Bogotá, Colombia") %>%
+  add_osm_feature(key = "admin_level", value = "9") %>%
+  osmdata_sf()
+
+localidades_poly <- localidades_osm$osm_multipolygons
+
+# ── Estaciones ───────────────────────────────────────────────
+estaciones_geo <- datos %>%
+  distinct(
+    sigla_estacion,
+    estacion_meteorologica_mas_cercana,
+    lat_estacion, lon_estacion,
+    pm2_5, pm10, tipo_zona_estacion
+  ) %>%
+  rename(
+    nombre = estacion_meteorologica_mas_cercana,
+    lat    = lat_estacion,
+    lon    = lon_estacion
+  )
+
+# ── Mapa ─────────────────────────────────────────────────────
+ggplot() +
+
+  # Polígono Bogotá
+  geom_sf(
+    data      = bogota_poly,
+    fill      = "#F5F5F5",
+    color     = "#AAAAAA",
+    linewidth = 0.5,
+    inherit.aes = FALSE
+  ) +
+
+  # Localidades (solo si OSM devolvió resultados)
+  {if (nrow(localidades_poly) > 0)
+    geom_sf(
+      data        = localidades_poly,
+      fill        = NA,
+      color       = "#CCCCCC",
+      linewidth   = 0.2,
+      inherit.aes = FALSE
+    )
+  } +
+
+  # Inmuebles coloreados por precio
+  geom_point(
+    data  = datos,
+    aes(x = longitud, y = latitud, color = precio_venta / 1e6),
+    size  = 0.7, alpha = 0.45
+  ) +
+  scale_color_gradient(
+    low    = "#FFF3CD",
+    high   = "#B22222",
+    name   = "Precio\n(MM COP)",
+    labels = label_number(big.mark = ",")
+  ) +
+
+  # Estaciones
+  geom_point(
+    data  = estaciones_geo,
+    aes(x = lon, y = lat),
+    shape = 17, size = 4.5, color = "#1A3C6E"
+  ) +
+
+  # Etiquetas
+  geom_label_repel(
+    data         = estaciones_geo,
+    aes(x = lon, y = lat, label = sigla_estacion),
+    size         = 2.6,
+    color        = "#1A3C6E",
+    fill         = "white",
+    label.size   = 0.3,
+    box.padding  = 0.5,
+    max.overlaps = 25,
+    fontface     = "bold"
+  ) +
+
+  # Zoom a la extensión de los datos
+  coord_sf(
+    xlim   = c(min(datos$longitud) - 0.02, max(datos$longitud) + 0.02),
+    ylim   = c(min(datos$latitud)  - 0.02, max(datos$latitud)  + 0.02),
+    expand = FALSE
+  ) +
+
+  labs(
+    title    = "Localización de inmuebles y estaciones de monitoreo",
+    subtitle = "Puntos: inmuebles en venta (color = precio). Triángulos ▲: estaciones RMCAB",
+    x        = "Longitud",
+    y        = "Latitud",
+    caption  = "Fuente: Metrocuadrado.com y RMCAB — Secretaría de Ambiente de Bogotá.\nContorno: © OpenStreetMap contributors."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(color = "grey40", size = 10),
+    legend.position = "right",
+    panel.grid      = element_line(color = "grey90", linewidth = 0.2),
+    axis.text       = element_text(size = 8)
+  )
+```
+
+### 6.5 Los contaminantes: PM2.5 y PM10
+```{r tabla-contaminantes}
+# ── Descripción estadística de los contaminantes ─────────────
+tabla_cont <- datos %>%
+  summarise(
+    across(
+      c(pm2_5, pm10, pm2_5_exp, pm10_exp),
+      list(
+        Media   = ~ round(mean(.,   na.rm = TRUE), 2),
+        Mediana = ~ round(median(., na.rm = TRUE), 2),
+        DE      = ~ round(sd(.,     na.rm = TRUE), 2),
+        Min     = ~ round(min(.,    na.rm = TRUE), 2),
+        Max     = ~ round(max(.,    na.rm = TRUE), 2)
+      ),
+      .names = "{.col}__{.fn}"
+    )
+  ) %>%
+  pivot_longer(
+    everything(),
+    names_to  = c("Variable", "Estadístico"),
+    names_sep = "__"
+  ) %>%
+  pivot_wider(names_from = "Estadístico", values_from = "value") %>%
+  mutate(
+    Variable = case_when(
+      Variable == "pm2_5"     ~ "PM2.5 estación (µg/m³)",
+      Variable == "pm10"      ~ "PM10 estación (µg/m³)",
+      Variable == "pm2_5_exp" ~ "PM2.5 estimado Exp. (µg/m³)",
+      Variable == "pm10_exp"  ~ "PM10 estimado Exp. (µg/m³)"
+    )
+  )
+
+tabla_cont %>%
+  kbl(
+    caption  = "Tabla 5. Estadísticas descriptivas de contaminantes PM2.5 y PM10",
+    booktabs = TRUE,
+    align    = c("l", "r", "r", "r", "r", "r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position   = "center",
+    font_size  = 12
+  ) %>%
+  row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
+  pack_rows("Medición directa en estación",      1, 2) %>%
+  pack_rows("Concentración estimada en inmueble", 3, 4) %>%
+  footnote(
+    general = paste0(
+      "OMS recomienda: PM2.5 ≤ 5 µg/m³ (anual) y PM10 ≤ 15 µg/m³ (anual). ",
+      "Valores estimados mediante modelo de decaimiento exponencial (λ)."
+    ),
+    general_title = "Nota:"
+  )
+```
+
+```{r grafico-contaminantes, fig.height=5, fig.cap="Figura 4. Distribución de PM2.5 y PM10 estimados por localidad"}
+datos %>%
+  mutate(loc = str_to_title(localidad_oficial_ideca)) %>%
+  group_by(loc) %>%
+  summarise(
+    pm2_5 = mean(pm2_5_exp, na.rm = TRUE),
+    pm10  = mean(pm10_exp,  na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(c(pm2_5, pm10), names_to = "contaminante", values_to = "valor") %>%
+  mutate(
+    contaminante = ifelse(contaminante == "pm2_5", "PM2.5 (µg/m³)", "PM10 (µg/m³)"),
+    loc = fct_reorder(loc, valor)
+  ) %>%
+  ggplot(aes(x = valor, y = loc, fill = contaminante)) +
+  geom_col(position = "dodge", alpha = 0.85, width = 0.7) +
+  geom_vline(
+    data = tibble(
+      contaminante = c("PM2.5 (µg/m³)", "PM10 (µg/m³)"),
+      umbral       = c(5, 15)
+    ),
+    aes(xintercept = umbral),
+    linetype = "dashed", color = "#B22222", linewidth = 0.7
+  ) +
+  scale_fill_manual(values = c("PM2.5 (µg/m³)" = "#2E74B5", "PM10 (µg/m³)" = "#F4A300")) +
+  facet_wrap(~ contaminante, scales = "free_x") +
+  labs(
+    title    = "Concentración media estimada de PM2.5 y PM10 por localidad",
+    subtitle = "Línea roja punteada: límite guía OMS (PM2.5 = 5 µg/m³ | PM10 = 15 µg/m³)",
+    x        = "Concentración media estimada (µg/m³)",
+    y        = NULL,
+    fill     = NULL,
+    caption  = "Fuente: RMCAB — modelo de decaimiento exponencial. Elaboración propia."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position  = "none",
+    strip.text       = element_text(face = "bold", size = 12),
+    plot.title       = element_text(face = "bold", size = 12),
+    plot.subtitle    = element_text(color = "grey40", size = 10),
+    panel.grid.minor = element_blank()
+  )
+```
+
+### 6.6 Distribución del precio de venta
+```{r grafico-precio-dist, fig.cap="Figura 5. Distribución del logaritmo del precio de venta"}
+p_hist <- ggplot(datos, aes(x = ln_precio_venta)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins  = 40, fill = "#2E74B5", alpha = 0.75, color = "white"
+  ) +
+  geom_density(color = "#B22222", linewidth = 1) +
+  labs(
+    title = "Distribución de ln(Precio de venta)",
+    x     = "ln(Precio de venta)",
+    y     = "Densidad"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold"))
+
+p_qq <- ggplot(datos, aes(sample = ln_precio_venta)) +
+  stat_qq(color = "#2E74B5", alpha = 0.4, size = 0.8) +
+  stat_qq_line(color = "#B22222", linewidth = 1) +
+  labs(
+    title = "Q-Q plot de ln(Precio de venta)",
+    x     = "Cuantiles teóricos",
+    y     = "Cuantiles observados"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold"))
+
+p_hist + p_qq +
+  plot_annotation(
+    subtitle = "La transformación logarítmica aproxima la distribución del precio a la normalidad",
+    caption  = "Fuente: Metrocuadrado.com. Elaboración propia.",
+    theme    = theme(plot.subtitle = element_text(color = "grey40", size = 10))
+  )
+```
+
+### 6.7 Gradiente espacial de contaminación y precio
+```{r grafico-gradiente, fig.height=5, fig.cap="Figura 6. Relación entre ln(PM2.5 estimado) y ln(Precio de venta)"}
+ggplot(datos, aes(x = ln_pm2_5_exp, y = ln_precio_venta)) +
+  geom_point(
+    aes(color = str_to_title(localidad_oficial_ideca)),
+    alpha = 0.35, size = 1.2
+  ) +
+  geom_smooth(
+    method    = "lm",
+    formula   = y ~ x,
+    color     = "#B22222",
+    linewidth = 1.2,
+    se        = TRUE,
+    fill      = "#B22222",
+    alpha     = 0.12
+  ) +
+  scale_color_viridis_d(option = "turbo", name = "Localidad") +
+  labs(
+    title    = "Gradiente espacial: contaminación PM2.5 vs precio de venta",
+    subtitle = "Cada punto es un inmueble. Línea roja: ajuste MCO (log-log)",
+    x        = "ln(PM2.5 estimado, µg/m³)",
+    y        = "ln(Precio de venta, COP)",
+    caption  = "Fuente: Metrocuadrado.com y RMCAB. Elaboración propia."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 12),
+    plot.subtitle   = element_text(color = "grey40", size = 10),
+    legend.key.size = unit(0.4, "cm"),
+    legend.text     = element_text(size = 8)
   )
 ```
 
