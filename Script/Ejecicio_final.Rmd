@@ -1,0 +1,740 @@
+---
+title: "Precios Hedonicos y Calidad del aire en Bogotá"
+author: "ALAPE GAMEZ, CARLOS DAVID; VIAFARA MORALES, JORGE ELIECER"
+date: "2026-05-19"
+output: html_document
+---
+### 1. Instalación de paquetes
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+#Limpiar la consola
+cat("\f")
+
+#Limpiar el Global Environment
+rm(list = ls())
+
+#Incluir las librerias
+if(!require(pacman)) install.packages("pacman") ; require(pacman)
+p_load(haven,        #Leer archivos .dta
+       dplyr,        #Manipular datos
+       stargazer,    #Visualizar tablas de regresión
+       fixest,       #Calcular los efectos fijos
+       plm,          #Datos de panel
+       knitr,        #Visualizar tablas adicionales
+       ivreg,        #Regresiones por variables instrumentales
+       broom,        #Extraer resultados de regresiones
+       AER,          #Regresiones por variables instrumentales
+       sandwich,     #Errores estándar robustos
+       lmtest,       #Pruebas estadísticas
+       kableExtra,   #Tablas avanzadas
+       tidyverse,    #Conjunto de paquetes para ciencia de datos
+       modelsummary, #Resumir modelos
+       ggplot2,      #Gráficos
+       rddensity,    #Test de McCrary
+       readxl,       #Leer archivos Excel
+       rio,         #Importar/exportar datos múltiples formatos
+       knitr,        #Tablas dinámicas
+       magick,       #Convertir tabla en PNG
+       webshot2,      #Guardar tablas como gráficos
+       tinytex,       #Compila documentos en Latex
+       pdftools,      #Leer archivos en PDF
+       tidyr,         #Manipulación de datos
+       mass,          #Función box-cox
+       countreg,      #Modelos de conteo
+       VGAM,          #Modelos de conteo
+       margins,       #Efectos marginales en modelos no lineales
+       survival       #Modelos de supervivencia
+      )
+```
+
+###2.  Transformación de datos en R
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Descargar y leer archivo Excel desde GitHub
+url_excel <- "https://raw.githubusercontent.com/GeorgeWton1986/Ejercicio_final/refs/heads/main/Data/2026_05_18_propiedades_V1_venta.xlsx"
+
+temp <- tempfile(fileext = ".xlsx")
+download.file(url_excel, destfile = temp, mode = "wb")
+
+# Leer Sheet1
+datos <- read_excel(temp, sheet = "Sheet1")
+```
+
+###3.  Leer base de datos 
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Ver estructura
+glimpse(datos)
+names(datos)
+```
+
+###4.  Limpieza de datos
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+# Limpieza de general de los datos
+datos <- datos %>%
+  mutate(
+    across(
+      everything(),
+      ~ ifelse(. == "", NA, .)
+    )
+  )
+```
+
+###5.  Filtro solo ventas
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Filtrar la base de datos por categoria venta
+if(!"tipo_negocio" %in% names(datos)){
+  stop(
+    "No existe la columna tipo_negocio"
+  )
+}
+
+datos <- datos %>%
+  mutate(
+    tipo_negocio = tipo_negocio %>%
+      as.character() %>%
+      str_trim() %>%
+      tolower()
+    
+  ) %>%
+  
+  filter(
+    tipo_negocio == "venta"
+  )
+
+cat(
+  "Registros después del filtro:",
+  nrow(datos),
+  "\n\n"
+)
+```
+
+###6. Variables principales 
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Variables de calidad del aire
+datos <- datos %>%
+  mutate(
+    
+    precio_venta = suppressWarnings(
+      as.numeric(precio_venta)
+    ),
+    
+    pm2_5_exp = suppressWarnings(
+      as.numeric(pm2_5_exp)
+    ),
+    
+    distancia_estacion_km = suppressWarnings(
+      as.numeric(distancia_estacion_km)
+    )
+    
+  )
+```
+
+###7. Logaritmos
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Variables de calidad del aire y precio venta en logaritmos
+datos <- datos %>%
+  mutate(
+    
+    ln_precio_venta = ifelse(
+      precio_venta > 0,
+      log(precio_venta),
+      NA
+    ),
+    
+    ln_pm2_5_exp = ifelse(
+      pm2_5_exp > 0,
+      log(pm2_5_exp),
+      NA
+    )
+    
+  )
+```
+
+###8. Vectores 
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# Los vectores que componen los controles
+vector_inmueble <- c(
+    "area_m2",
+    "habitaciones",
+    "banos",
+    "parqueaderos"
+    )
+
+vector_vecindario <- c(
+  "distancia_estacion_km"
+  )
+
+vector_clima <- c(
+  "precipitacion"
+  )
+
+vector_espacial <- c(
+  "localidad_oficial_ideca"
+ )
+```
+
+###9. Vector de control
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+# El vector de control
+
+variables_control <- c(
+  vector_inmueble,
+  vector_vecindario,
+  vector_clima,
+  vector_espacial
+  )
+
+variables_control <- variables_control[
+  variables_control %in% names(datos)
+]
+```
+
+###10. Variables númericas
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+variables_numericas <- c(
+  
+  vector_inmueble,
+  vector_vecindario,
+  vector_clima,
+  
+  "precio_venta",
+  "pm2_5_exp",
+  "distancia_estacion_km",
+  
+  "ln_precio_venta",
+  "ln_pm2_5_exp"
+  
+)
+
+variables_numericas <- unique(
+  variables_numericas
+)
+
+variables_numericas <- variables_numericas[
+  variables_numericas %in% names(datos)
+]
+```
+
+###11. Variables factor
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+variables_factor <- c(
+  vector_espacial
+)
+
+variables_factor <- variables_factor[
+  variables_factor %in% names(datos)
+]
+```
+
+###12. Convertir variables
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+datos <- datos %>%
+  mutate(
+    across(
+      all_of(variables_numericas),
+      ~ suppressWarnings(as.numeric(.))
+    )
+  )
+
+datos <- datos %>%
+  mutate(
+    across(
+      all_of(variables_factor),
+      as.factor
+    )
+  )
+```
+
+###13. Imputación de variables
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+#Imputación de las variables numericas con la media y mediana
+
+for(v in variables_numericas){
+  
+  mediana_var <- median(
+    datos[[v]],
+    na.rm = TRUE
+  )
+  
+  datos[[v]][
+    is.na(datos[[v]])
+  ] <- mediana_var
+  
+}
+```
+
+###14. Eliminar variables sin variación
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+#Imputación de las variables numericas con la media y mediana
+
+variables_finales <- c()
+
+for(v in variables_control){
+  
+  if(is.numeric(datos[[v]])){
+    
+    n_unicos <- length(
+      unique(
+        na.omit(datos[[v]])
+      )
+    )
+    
+    if(n_unicos >= 2){
+      
+      variables_finales <- c(
+        variables_finales,
+        v
+      )
+      
+    }
+    
+  }
+  
+  else if(is.factor(datos[[v]])){
+    
+    n_niveles <- nlevels(
+      droplevels(
+        datos[[v]]
+      )
+    )
+    
+    if(n_niveles >= 2){
+      
+      variables_finales <- c(
+        variables_finales,
+        v
+      )
+      
+    }
+    
+  }
+  
+}
+```
+
+###15. Especificación del Modelo
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+# ln(P_venta)
+# ln (pm2_5_exp)
+# + distancia_estacion_km
+# + controles
+
+formula_loglog <- as.formula(
+  paste(
+    "ln_precio_venta ~",
+    "ln_pm2_5_exp +",
+    "distancia_estacion_km +",
+    paste(vector_inmueble, collapse = " + "), "+",
+    "precipitacion"
+    # Sin localidad_oficial_ideca: no absorber variación between
+  )
+)
+
+variables_finales <- c()
+
+for(v in variables_control){
+  if(is.numeric(datos[[v]])){
+    n_unicos <- length(
+      unique(
+        na.omit(datos[[v]])
+      )
+    )
+  if(n_unicos >= 2){
+    variables_finales <- c(
+    variables_finales,
+    v
+    )
+      
+    }
+  }
+  
+  else if(is.factor(datos[[v]])){
+    n_niveles <- nlevels(
+    droplevels(
+      datos[[v]]
+      )
+    )
+    
+    if(n_niveles >= 2){
+        variables_finales <- c(
+        variables_finales,
+        v
+      )
+    }
+  }
+}
+
+cat("MODELO FINAL\n")
+print(formula_loglog)
+cat("\n")
+```
+
+###16. Estimar el Modelo
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+modelo_loglog <- lm(
+  formula_loglog,
+  data = datos
+)
+
+summary(modelo_loglog)
+```
+###17. Errores robustos
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+robusto_loglog <- coeftest(
+  modelo_loglog,
+  vcov = vcovHC(modelo_loglog, type = "HC1")
+)
+
+print(robusto_loglog)
+```
+
+###17.1 Comparación de resultados
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+modelos_comparacion <- list(
+  "Nivel (original)"  = lm(ln_precio_venta ~ pm2_5_exp + distancia_estacion_km +
+                              area_m2 + habitaciones + banos + parqueaderos +
+                              precipitacion + localidad_oficial_ideca, data = datos),
+  "Log-log con EF"    = lm(ln_precio_venta ~ ln_pm2_5_exp + distancia_estacion_km +
+                              area_m2 + habitaciones + banos + parqueaderos +
+                              precipitacion + localidad_oficial_ideca, data = datos),
+  "Log-log sin EF"    = modelo_loglog
+)
+
+modelsummary(
+  modelos_comparacion,
+  vcov = "HC1",
+  stars = TRUE,
+  coef_map = c(
+    "pm2_5_exp"            = "PM2.5 exp (nivel)",
+    "ln_pm2_5_exp"         = "ln(PM2.5 exp)",
+    "distancia_estacion_km"= "Distancia estación (km)",
+    "area_m2"              = "Área m²",
+    "habitaciones"         = "Habitaciones",
+    "banos"                = "Baños",
+    "parqueaderos"         = "Parqueaderos",
+    "precipitacion"        = "Precipitación"
+  ),
+  gof_map = c("nobs","r.squared","adj.r.squared")
+)
+```
+
+###17.2 Calculo del MWTP y tasa pigouviana
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+# ============================================================
+# MWTP y tasa pigouviana — modelo log-log
+# dP/dc = (β / c̄) × P̄
+# ============================================================
+
+beta_loglog  <- robusto_loglog["ln_pm2_5_exp", 1]      # -0.02365
+precio_medio <- mean(datos$precio_venta, na.rm = TRUE)
+c_medio      <- mean(datos$pm2_5_exp,    na.rm = TRUE)
+
+mwtp_cop <- (beta_loglog / c_medio) * precio_medio
+
+cat("=== MWTP MARGINAL ===\n")
+cat("β (elasticidad):    ", round(beta_loglog, 4), "\n")
+cat("PM2.5 medio (c̄):   ", round(c_medio, 2), "µg/m³\n")
+cat("Precio medio (P̄):  ", format(round(precio_medio), big.mark=","), "COP\n")
+cat("MWTP por µg/m³:    ", format(round(mwtp_cop), big.mark=","), "COP\n\n")
+
+# Tasa pigouviana
+N          <- nrow(datos)
+t_unitario <- abs(mwtp_cop)
+t_agregado <- t_unitario * N
+
+cat("=== TASA PIGOUVIANA ===\n")
+cat("t* por inmueble:   ", format(round(t_unitario), big.mark=","), "COP/µg/m³\n")
+cat("t* agregado (N=", N, "):", format(round(t_agregado/1e6, 1), big.mark=","), "MM COP\n\n")
+
+# Escenarios de ganancia de bienestar
+escenarios <- tibble(reduccion_pct = c(10, 20, 30, 50)) %>%
+  mutate(
+    delta_c      = c_medio * reduccion_pct / 100,
+    ganancia_unit = abs(mwtp_cop) * delta_c,
+    ganancia_agr  = ganancia_unit * N / 1e6
+  )
+
+print(escenarios)
+
+```
+
+###18. Extraer los resultados
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+beta_pm2_5_exp <- robusto_final[
+  "pm2_5_exp",
+  1
+]
+
+p_pm2_5_exp <- robusto_final[
+  "pm2_5_exp",
+  4
+]
+
+beta_distancia <- robusto_final[
+  "distancia_estacion_km",
+  1
+]
+
+p_distancia <- robusto_final[
+  "distancia_estacion_km",
+  4
+]
+```
+
+###19. Interpretación
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+cat(
+  paste0(
+    "pm2_5_exp:\n",
+    "Un aumento de 1 ug/m3 en pm2_5_exp cambia el precio de vivienda en ",
+    round(beta_pm2_5_exp*100,4),
+    "%\n\n"
+  )
+)
+
+cat(
+  paste0(
+    "DISTANCIA ESTACIÓN:\n",
+    "Un aumento de 1 km cambia el precio de vivienda en ",
+    round(beta_distancia*100,4),
+    "%\n\n"
+  )
+)
+```
+
+###20. Validación de hipotesis
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+if(beta_pm2_5_exp < 0){
+  cat(
+    "HIPÓTESIS VALIDADA:\n"
+  )
+  cat(
+    "Mayor contaminación reduce el precio de vivienda.\n\n"
+  )
+} else {
+  cat(
+    "HIPÓTESIS NO VALIDADA.\n\n"
+  )
+}
+```
+
+###21. VIF
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+
+vif_modelo <- vif(
+  modelo_final
+)
+print(vif_modelo)
+```
+
+###22. Prueba de BREUSCH-PAGAN
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+#Prueba de BREUSCH-PAGAN
+
+bp_modelo <- bptest(
+  modelo_final
+)
+
+print(bp_modelo)
+```
+
+###23. Métricas
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+#Prueba de BREUSCH-PAGAN
+
+cat(
+  "R²:",
+  round(summary(modelo_final)$r.squared,4),
+  "\n"
+)
+
+cat(
+  "R² Ajustado:",
+  round(summary(modelo_final)$adj.r.squared,4),
+  "\n"
+)
+
+cat(
+  "AIC:",
+  round(AIC(modelo_final),2),
+  "\n"
+)
+
+cat(
+  "BIC:",
+  round(BIC(modelo_final),2),
+  "\n\n"
+)
+```
+
+###24. Exportar HTML
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+modelsummary(
+  
+  list(
+    
+    "Modelo Final pm2_5_exp" = modelo_final
+    
+  ),
+  
+  stars = TRUE,
+  
+  output = file.path(
+    ruta_base,
+    "MODELO_FINAL_pm2_5_exp_SIN_INTERACCION.html"
+  )
+  
+)
+```
+
+
+###25. Exportar Excel
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+wb <- createWorkbook()
+
+addWorksheet(
+  wb,
+  "Resultados"
+)
+
+tabla_resultados <- data.frame(
+  
+  Variable = c(
+    "pm2_5_exp",
+    "distancia_estacion_km"
+  ),
+  
+  Coeficiente = c(
+    beta_pm2_5_exp,
+    beta_distancia
+  ),
+  
+  p_value = c(
+    p_pm2_5_exp,
+    p_distancia
+  )
+  
+)
+
+writeData(
+  wb,
+  "Resultados",
+  tabla_resultados
+)
+
+# ---------------------------------------------------------
+# HC1
+# ---------------------------------------------------------
+
+addWorksheet(
+  wb,
+  "HC1"
+)
+
+writeData(
+  wb,
+  "HC1",
+  broom::tidy(robusto_final)
+)
+
+# ---------------------------------------------------------
+# VIF
+# ---------------------------------------------------------
+
+addWorksheet(
+  wb,
+  "VIF"
+)
+
+vif_df <- as.data.frame(vif_modelo)
+
+vif_df$Variable <- rownames(vif_df)
+
+rownames(vif_df) <- NULL
+
+writeData(
+  wb,
+  "VIF",
+  vif_df
+)
+
+# ---------------------------------------------------------
+# MÉTRICAS
+# ---------------------------------------------------------
+
+addWorksheet(
+  wb,
+  "Metricas"
+)
+
+metricas <- data.frame(
+  
+  R2 = summary(modelo_final)$r.squared,
+  
+  R2_Ajustado = summary(modelo_final)$adj.r.squared,
+  
+  AIC = AIC(modelo_final),
+  
+  BIC = BIC(modelo_final),
+  
+  Observaciones = nobs(modelo_final)
+  
+)
+
+writeData(
+  wb,
+  "Metricas",
+  metricas
+)
+
+# ---------------------------------------------------------
+# GUARDAR
+# ---------------------------------------------------------
+
+ruta_salida <- file.path(
+  ruta_base,
+  "RESULTADOS_pm2_5_exp_SIN_INTERACCION.xlsx"
+)
+
+saveWorkbook(
+  wb,
+  ruta_salida,
+  overwrite = TRUE
+)
+```
+
+###26. Diagnostico
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+png(
+  
+  filename = file.path(
+    ruta_base,
+    "DIAGNOSTICO_pm2_5_exp_SIN_INTERACCION.png"
+  ),
+  
+  width = 1800,
+  height = 1400,
+  res = 200
+  
+)
+
+par(mfrow = c(2,2))
+
+plot(modelo_final)
+
+dev.off()
+```
+
+###27. Finalización
+```{r ECHO=FALSE, warning=FALSE, message=FALSE}
+cat("MODELO FINAL COMPLETADO\n")
+```
