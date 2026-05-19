@@ -280,6 +280,130 @@ border: 0;
 
 </head>
 <body>
-Nivel (original) Log-log con EF Log-log sin EF
+<table class="table table-hover table-condensed" style="font-size: 12px; color: black; margin-left: auto; margin-right: auto;border-bottom: 0;">
+<caption style="font-size: initial !important;">Tabla 6. Resultados del modelo hedónico log-log — Variable dependiente: ln(Precio de venta)</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;">   </th>
+   <th style="text-align:left;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;"> Variable </th>
+   <th style="text-align:right;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;"> Coeficiente </th>
+   <th style="text-align:right;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;"> Error estándar (HC1) </th>
+   <th style="text-align:right;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;"> Estadístico t </th>
+   <th style="text-align:right;font-weight: bold;color: white !important;background-color: rgba(46, 116, 181, 255) !important;"> p-valor </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr grouplength="1"><td colspan="6" style="border-bottom: 1px solid;color: rgba(136, 136, 136, 255) !important;"><strong>Intercepto</strong></td></tr>
+<tr>
+   <td style="text-align:left;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> (Intercept) </td>
+   <td style="text-align:left;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;width: 9em; "> Intercepto </td>
+   <td style="text-align:right;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 19.22465*** </td>
+   <td style="text-align:right;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;width: 8em; "> (0.03258) </td>
+   <td style="text-align:right;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;width: 7em; "> 589.990 </td>
+   <td style="text-align:right;font-style: italic;color: rgba(136, 136, 136, 255) !important;background-color: rgba(248, 248, 248, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+  <tr grouplength="2"><td colspan="6" style="border-bottom: 1px solid;color: rgba(46, 116, 181, 255) !important;"><strong>Variables ambientales</strong></td></tr>
+<tr>
+   <td style="text-align:left;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> ln_pm2_5_exp </td>
+   <td style="text-align:left;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 9em; "> ln(PM2.5 estimado) </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> -0.02365* </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 8em; "> (0.01092) </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 7em; "> -2.167 </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;"> 0.0304 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> distancia_estacion_km </td>
+   <td style="text-align:left;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 9em; "> Distancia estación (km) </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.02754*** </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 8em; "> (0.00757) </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;width: 7em; "> 3.639 </td>
+   <td style="text-align:right;font-weight: bold;background-color: rgba(235, 243, 251, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+  <tr grouplength="5"><td colspan="6" style="border-bottom: 1px solid;color: rgba(46, 116, 181, 255) !important;"><strong>Variables de control</strong></td></tr>
+<tr>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> area_m2 </td>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 9em; "> Área (m²) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.00060*** </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 8em; "> (0.00011) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 7em; "> 5.369 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> habitaciones </td>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 9em; "> Habitaciones </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> -0.01900 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 8em; "> (0.01158) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 7em; "> -1.640 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;"> 0.1012 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> banos </td>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 9em; "> Baños </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.26505*** </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 8em; "> (0.01328) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 7em; "> 19.953 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> parqueaderos </td>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;width: 9em; "> Parqueaderos </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.27290*** </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 8em; "> (0.01319) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;width: 7em; "> 20.689 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> precipitacion </td>
+   <td style="text-align:left;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;width: 9em; "> Precipitación </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> -0.00648*** </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;width: 8em; "> (0.00081) </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;width: 7em; "> -7.949 </td>
+   <td style="text-align:right;background-color: rgba(255, 255, 255, 255) !important;border-bottom: 2px solid #2E74B5;"> &lt; 0.001 </td>
+  </tr>
+  <tr grouplength="5"><td colspan="6" style="border-bottom: 1px solid;color: rgba(52, 168, 83, 255) !important;"><strong>Bondad de ajuste</strong></td></tr>
+<tr>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> 1 </td>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 9em; "> Observaciones </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 1,972 </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 8em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 7em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> 2 </td>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 9em; "> R² </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.820 </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 8em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 7em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> 3 </td>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 9em; "> R² ajustado </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.820 </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 8em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 7em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> 4 </td>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 9em; "> Error estándar residual </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 0.3510 </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 8em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 7em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 16em; font-weight: bold;padding-left: 2em;" indentlevel="1"> 5 </td>
+   <td style="text-align:left;background-color: rgba(240, 247, 239, 255) !important;width: 9em; "> Estadístico F </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 9em; font-style: italic;color: rgba(85, 85, 85, 255) !important;"> 1281.4 </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 8em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;width: 7em; ">  </td>
+   <td style="text-align:right;background-color: rgba(240, 247, 239, 255) !important;"> &lt; 0.001 </td>
+  </tr>
+</tbody>
+<tfoot><tr><td style="padding: 0; " colspan="100%">
+<span style="font-style: italic;">Nota:</span> <sup></sup> Errores estándar robustos HC1. + p &lt; 0.1,  * p &lt; 0.05,  ** p &lt; 0.01,  *** p &lt; 0.001. Especificación log-log sin efectos fijos de localidad. Muestra: 1,972 inmuebles en venta — Bogotá D.C., 2026.</td></tr></tfoot>
+</table>
 </body>
 </html>
