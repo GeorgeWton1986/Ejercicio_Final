@@ -1769,10 +1769,66 @@ t9 <-escenarios %>%
   )
 ```
 
+# 18. Exportar tablas y figuras descriptivas
+```{r setup-exportar, include=FALSE}
+# ── Crear estructura de carpetas ──────────────────────────────
+dir.create("outputs/tablas",  recursive = TRUE, showWarnings = FALSE)
+dir.create("outputs/figuras", recursive = TRUE, showWarnings = FALSE)
+
+cat("Carpetas creadas:\n")
+cat("  outputs/tablas/  — tablas en PNG de alta resolución\n")
+cat("  outputs/figuras/ — gráficos en PNG y PDF\n")
+```
+
+```{r funcion-guardar-tabla, include=FALSE}
+
+# ── Función genérica: guardar tabla kable como PNG ────────────
+guardar_tabla <- function(kable_obj, nombre_archivo, ancho = 1400, alto = NULL) {
+
+  ruta_html <- file.path("outputs/tablas", paste0(nombre_archivo, ".html"))
+  ruta_png  <- file.path("outputs/tablas", paste0(nombre_archivo, ".png"))
+
+  # Guardar HTML temporal
+  save_kable(kable_obj, file = ruta_html, self_contained = TRUE)
+
+  # Convertir a PNG con webshot2 (alta resolución)
+  webshot2::webshot(
+    url    = ruta_html,
+    file   = ruta_png,
+    zoom   = 3,          # 3x = ~300 dpi equivalente
+    vwidth = ancho,
+    vheight = if (is.null(alto)) 400 else alto,
+    cliprect = "viewport"
+  )
+
+  cat("✓ Tabla guardada:", ruta_png, "\n")
+  invisible(ruta_png)
+}
+
+# ── Función genérica: guardar ggplot como PNG y PDF ───────────
+guardar_figura <- function(plot_obj, nombre_archivo,
+                           ancho_cm = 20, alto_cm = 14, dpi = 300) {
+
+  ruta_png <- file.path("outputs/figuras", paste0(nombre_archivo, ".png"))
+  ruta_pdf <- file.path("outputs/figuras", paste0(nombre_archivo, ".pdf"))
+
+  ggsave(ruta_png, plot = plot_obj,
+         width = ancho_cm, height = alto_cm, units = "cm",
+         dpi = dpi, bg = "white")
+
+  ggsave(ruta_pdf, plot = plot_obj,
+         width = ancho_cm, height = alto_cm, units = "cm",
+         device = cairo_pdf, bg = "white")
+
+  cat("✓ Figura guardada:", ruta_png, "\n")
+  cat("✓ Figura guardada:", ruta_pdf, "\n")
+  invisible(list(png = ruta_png, pdf = ruta_pdf))
+}
+```
 
 ---
 
-### Exportar tablas descriptivas
+###18.1 Exportar tablas descriptivas
 
 ```{r exportar-tablas-descriptivas, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -1803,7 +1859,7 @@ t3 <- tabla_loc %>%
   kbl(caption = "Tabla 3. Distribución de inmuebles y precios por localidad",
       align = c("l","r","r","r","r","r","r","r"), booktabs = TRUE) %>%
   kable_styling(bootstrap_options = c("striped","hover","condensed"),
-                full_width = FALSE, font_size = 12) %>%
+                full_width = TRUE, font_size = 12) %>%
   row_spec(0, bold = TRUE, background = "#2E74B5", color = "white") %>%
   column_spec(1, bold = TRUE) %>%
   footnote(general = "NaN indica ausencia de ese tipo en la localidad.",
@@ -1840,7 +1896,9 @@ t5 <- tabla_cont %>%
 guardar_tabla(t5, "tabla_05_contaminantes")
 ```
 
-### Exportar figuras descriptivas
+---
+
+####18.2 Exportar figuras descriptivas
 
 ```{r exportar-figuras-descriptivas, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -1899,86 +1957,16 @@ guardar_figura(fig2, "figura_02_barras_localidades",
                ancho_cm = 26, alto_cm = 16)
 
 # ── Figura 3: mapa ────────────────────────────────────────────
+# (reutilizar el objeto guardado si lo asignaste; si no, regenerar)
+# fig3 <- 
 
-fig3 <- ggplot() +
 
-  # Polígono Bogotá
-  geom_sf(
-    data      = bogota_poly,
-    fill      = "#F5F5F5",
-    color     = "#AAAAAA",
-    linewidth = 0.5,
-    inherit.aes = FALSE
-  ) +
 
-  # Localidades (solo si OSM devolvió resultados)
-  {if (nrow(localidades_poly) > 0)
-    geom_sf(
-      data        = localidades_poly,
-      fill        = NA,
-      color       = "#CCCCCC",
-      linewidth   = 0.2,
-      inherit.aes = FALSE
-    )
-  } +
 
-  # Inmuebles coloreados por precio
-  geom_point(
-    data  = datos,
-    aes(x = longitud, y = latitud, color = precio_venta / 1e6),
-    size  = 0.7, alpha = 0.45
-  ) +
-  scale_color_gradient(
-    low    = "#FFF3CD",
-    high   = "#B22222",
-    name   = "Precio\n(MM COP)",
-    labels = label_number(big.mark = ",")
-  ) +
 
-  # Estaciones
-  geom_point(
-    data  = estaciones_geo,
-    aes(x = lon, y = lat),
-    shape = 17, size = 4.5, color = "#1A3C6E"
-  ) +
 
-  # Etiquetas
-  geom_label_repel(
-    data         = estaciones_geo,
-    aes(x = lon, y = lat, label = sigla_estacion),
-    size         = 2.6,
-    color        = "#1A3C6E",
-    fill         = "white",
-    label.size   = 0.3,
-    box.padding  = 0.5,
-    max.overlaps = 25,
-    fontface     = "bold"
-  ) +
-
-  # Zoom a la extensión de los datos
-  coord_sf(
-    xlim   = c(min(datos$longitud) - 0.02, max(datos$longitud) + 0.02),
-    ylim   = c(min(datos$latitud)  - 0.02, max(datos$latitud)  + 0.02),
-    expand = FALSE
-  ) +
-
-  labs(
-    title    = "Localización de inmuebles y estaciones de monitoreo",
-    subtitle = "Puntos: inmuebles en venta (color = precio). Triángulos ▲: estaciones RMCAB",
-    x        = "Longitud",
-    y        = "Latitud",
-    caption  = "Fuente: Metrocuadrado.com y RMCAB — Secretaría de Ambiente de Bogotá.\nContorno: © OpenStreetMap contributors."
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(
-    plot.title      = element_text(face = "bold", size = 13),
-    plot.subtitle   = element_text(color = "grey40", size = 10),
-    legend.position = "right",
-    panel.grid      = element_line(color = "grey90", linewidth = 0.2),
-    axis.text       = element_text(size = 8)
-  )
-guardar_figura(fig3, "figura_03_mapa_inmuebles_estaciones",
-                ancho_cm = 20, alto_cm = 22)
+# guardar_figura(fig3, "figura_03_mapa_inmuebles_estaciones",
+#                ancho_cm = 20, alto_cm = 22)
 
 # ── Figura 4: contaminantes por localidad ────────────────────
 fig4 <- datos %>%
@@ -2061,9 +2049,7 @@ guardar_figura(fig6, "figura_06_gradiente_espacial",
                ancho_cm = 22, alto_cm = 14)
 ```
 
----
-
-### Exportar tablas del modelo
+###18.3 Exportar tablas del modelo
 
 ```{r exportar-tablas-modelo, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -2094,279 +2080,28 @@ cat("Figuras → outputs/figuras/  (PNG 300 dpi + PDF vectorial)\n")
 
 ```
 
-####---------
-
-###18. Extraer los resultados
+###19. VIF
 ```{r ECHO=FALSE, warning=FALSE, message=FALSE}
 
-beta_pm2_5_exp <- robusto_final[
-  "pm2_5_exp",
-  1
-]
-
-p_pm2_5_exp <- robusto_final[
-  "pm2_5_exp",
-  4
-]
-
-beta_distancia <- robusto_final[
-  "distancia_estacion_km",
-  1
-]
-
-p_distancia <- robusto_final[
-  "distancia_estacion_km",
-  4
-]
-```
-
-###19. Interpretación
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-
-cat(
-  paste0(
-    "pm2_5_exp:\n",
-    "Un aumento de 1 ug/m3 en pm2_5_exp cambia el precio de vivienda en ",
-    round(beta_pm2_5_exp*100,4),
-    "%\n\n"
-  )
+vif_modelo_loglog <- vif(
+  modelo_loglog
 )
-
-cat(
-  paste0(
-    "DISTANCIA ESTACIÓN:\n",
-    "Un aumento de 1 km cambia el precio de vivienda en ",
-    round(beta_distancia*100,4),
-    "%\n\n"
-  )
-)
+print(vif_modelo_loglog)
 ```
 
-###20. Validación de hipotesis
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-
-if(beta_pm2_5_exp < 0){
-  cat(
-    "HIPÓTESIS VALIDADA:\n"
-  )
-  cat(
-    "Mayor contaminación reduce el precio de vivienda.\n\n"
-  )
-} else {
-  cat(
-    "HIPÓTESIS NO VALIDADA.\n\n"
-  )
-}
-```
-
-###21. VIF
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-
-vif_modelo <- vif(
-  modelo_final
-)
-print(vif_modelo)
-```
-
-###22. Prueba de BREUSCH-PAGAN
+###20. Prueba de BREUSCH-PAGAN
 ```{r ECHO=FALSE, warning=FALSE, message=FALSE}
 #Prueba de BREUSCH-PAGAN
 
-bp_modelo <- bptest(
-  modelo_final
+bp_modelo_loglog <- bptest(
+  modelo_loglog
 )
 
-print(bp_modelo)
-```
-
-###23. Métricas
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-#Prueba de BREUSCH-PAGAN
-
-cat(
-  "R²:",
-  round(summary(modelo_final)$r.squared,4),
-  "\n"
-)
-
-cat(
-  "R² Ajustado:",
-  round(summary(modelo_final)$adj.r.squared,4),
-  "\n"
-)
-
-cat(
-  "AIC:",
-  round(AIC(modelo_final),2),
-  "\n"
-)
-
-cat(
-  "BIC:",
-  round(BIC(modelo_final),2),
-  "\n\n"
-)
-```
-
-###24. Exportar HTML
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-modelsummary(
-  
-  list(
-    
-    "Modelo Final pm2_5_exp" = modelo_final
-    
-  ),
-  
-  stars = TRUE,
-  
-  output = file.path(
-    ruta_base,
-    "MODELO_FINAL_pm2_5_exp_SIN_INTERACCION.html"
-  )
-  
-)
+print(bp_modelo_loglog)
 ```
 
 
-###25. Exportar Excel
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-wb <- createWorkbook()
-
-addWorksheet(
-  wb,
-  "Resultados"
-)
-
-tabla_resultados <- data.frame(
-  
-  Variable = c(
-    "pm2_5_exp",
-    "distancia_estacion_km"
-  ),
-  
-  Coeficiente = c(
-    beta_pm2_5_exp,
-    beta_distancia
-  ),
-  
-  p_value = c(
-    p_pm2_5_exp,
-    p_distancia
-  )
-  
-)
-
-writeData(
-  wb,
-  "Resultados",
-  tabla_resultados
-)
-
-# ---------------------------------------------------------
-# HC1
-# ---------------------------------------------------------
-
-addWorksheet(
-  wb,
-  "HC1"
-)
-
-writeData(
-  wb,
-  "HC1",
-  broom::tidy(robusto_final)
-)
-
-# ---------------------------------------------------------
-# VIF
-# ---------------------------------------------------------
-
-addWorksheet(
-  wb,
-  "VIF"
-)
-
-vif_df <- as.data.frame(vif_modelo)
-
-vif_df$Variable <- rownames(vif_df)
-
-rownames(vif_df) <- NULL
-
-writeData(
-  wb,
-  "VIF",
-  vif_df
-)
-
-# ---------------------------------------------------------
-# MÉTRICAS
-# ---------------------------------------------------------
-
-addWorksheet(
-  wb,
-  "Metricas"
-)
-
-metricas <- data.frame(
-  
-  R2 = summary(modelo_final)$r.squared,
-  
-  R2_Ajustado = summary(modelo_final)$adj.r.squared,
-  
-  AIC = AIC(modelo_final),
-  
-  BIC = BIC(modelo_final),
-  
-  Observaciones = nobs(modelo_final)
-  
-)
-
-writeData(
-  wb,
-  "Metricas",
-  metricas
-)
-
-# ---------------------------------------------------------
-# GUARDAR
-# ---------------------------------------------------------
-
-ruta_salida <- file.path(
-  ruta_base,
-  "RESULTADOS_pm2_5_exp_SIN_INTERACCION.xlsx"
-)
-
-saveWorkbook(
-  wb,
-  ruta_salida,
-  overwrite = TRUE
-)
-```
-
-###26. Diagnostico
-```{r ECHO=FALSE, warning=FALSE, message=FALSE}
-png(
-  
-  filename = file.path(
-    ruta_base,
-    "DIAGNOSTICO_pm2_5_exp_SIN_INTERACCION.png"
-  ),
-  
-  width = 1800,
-  height = 1400,
-  res = 200
-  
-)
-
-par(mfrow = c(2,2))
-
-plot(modelo_final)
-
-dev.off()
-```
-
-###27. Finalización
+###21. Finalización
 ```{r ECHO=FALSE, warning=FALSE, message=FALSE}
 cat("MODELO FINAL COMPLETADO\n")
 ```
